@@ -1,0 +1,12 @@
+ollama
+langchain
+langchain-community
+langgraph
+chromadb
+sentence-transformers
+openai-whisper
+PyMuPDF
+gradio
+pydantic
+pydantic-settings
+pytest
