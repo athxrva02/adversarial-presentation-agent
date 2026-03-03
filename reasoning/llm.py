@@ -12,9 +12,9 @@ Goals:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import settings
@@ -28,8 +28,7 @@ from reasoning.json_utils import JSONParseError, build_json_repair_prompt, parse
 @dataclass(frozen=True)
 class LLMOptions:
     """
-    Generation options to balance determinism and speed.
-    These map to Ollama options through ChatOllama.model_kwargs.
+    Ollama generation options. These map to the Ollama `options` object.
     """
     temperature: float = 0.2
     num_predict: int = 350          # max tokens to generate
@@ -49,35 +48,35 @@ _client: Optional[ChatOllama] = None
 def get_llm_client() -> ChatOllama:
     """
     Create (once) and return a ChatOllama client.
-    We keep it global so nodes don't re-create it each call.
     """
     global _client
     if _client is None:
-        # ChatOllama supports base_url and model name
         _client = ChatOllama(
             base_url=settings.ollama_base_url,
             model=settings.model_name,
-            temperature=getattr(settings, "temperature", 0.2),
         )
     return _client
 
 
-def _to_model_kwargs(opts: Optional[LLMOptions]) -> dict[str, Any]:
+def _to_ollama_options(opts: Optional[LLMOptions]) -> dict[str, Any]:
+    """
+    Convert our LLMOptions into Ollama's `options` dict.
+    """
     if opts is None:
         return {}
 
-    mk: dict[str, Any] = {
+    o: dict[str, Any] = {
+        "temperature": opts.temperature,
         "num_predict": opts.num_predict,
         "num_ctx": opts.num_ctx,
-        "temperature": opts.temperature,
     }
     if opts.top_p is not None:
-        mk["top_p"] = opts.top_p
+        o["top_p"] = opts.top_p
     if opts.repeat_penalty is not None:
-        mk["repeat_penalty"] = opts.repeat_penalty
+        o["repeat_penalty"] = opts.repeat_penalty
     if opts.seed is not None:
-        mk["seed"] = opts.seed
-    return mk
+        o["seed"] = opts.seed
+    return o
 
 
 def call_llm_text(
@@ -91,14 +90,13 @@ def call_llm_text(
     """
     llm = get_llm_client()
 
-    # Override per-call options without rebuilding the client:
-    llm = llm.bind(model_kwargs=_to_model_kwargs(options))
-
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_prompt),
     ]
-    resp = llm.invoke(messages)
+
+    # langchain-ollama expects Ollama parameters under `options=...`
+    resp = llm.invoke(messages, options=_to_ollama_options(options))
     content = getattr(resp, "content", "")
     return content if isinstance(content, str) else str(content)
 
@@ -133,41 +131,49 @@ def call_llm_structured(
             raw_output=raw,
             error=str(e),
         )
-        # Use more deterministic settings for repair
-        repair_opts = options or LLMOptions()
+
+        # More deterministic retry
+        base = options or LLMOptions(
+            temperature=getattr(settings, "temperature", 0.2),
+            num_predict=getattr(settings, "max_tokens", 400),
+            num_ctx=getattr(settings, "num_ctx", 4096),
+        )
         repair_opts = LLMOptions(
-            temperature=min(repair_opts.temperature, 0.2),
-            num_predict=max(repair_opts.num_predict, 300),
-            num_ctx=repair_opts.num_ctx,
-            top_p=repair_opts.top_p,
-            repeat_penalty=repair_opts.repeat_penalty,
-            seed=repair_opts.seed,
+            temperature=min(base.temperature, 0.2),
+            num_predict=max(base.num_predict, 300),
+            num_ctx=base.num_ctx,
+            top_p=base.top_p,
+            repeat_penalty=base.repeat_penalty,
+            seed=base.seed,
         )
 
         repaired_raw = call_llm_text(repair.system, repair.user, options=repair_opts)
         return parse_json(repaired_raw)
 
 
-# ----------------------------
-# Convenience presets (optional)
-# ----------------------------
+# Convenience presets
 
 def opts_practice_question() -> LLMOptions:
-    """
-    Slightly higher temperature for varied questions.
-    """
-    return LLMOptions(temperature=0.5, num_predict=250, num_ctx=4096)
+    # Slightly higher temperature for varied questions
+    return LLMOptions(
+        temperature=0.5,
+        num_predict=250,
+        num_ctx=getattr(settings, "num_ctx", 4096),
+    )
 
 
 def opts_judge_or_classify() -> LLMOptions:
-    """
-    Low temperature for stable judgments and JSON compliance.
-    """
-    return LLMOptions(temperature=0.2, num_predict=250, num_ctx=4096)
+    # Low temperature for stable judgments and JSON compliance
+    return LLMOptions(
+        temperature=0.2,
+        num_predict=250,
+        num_ctx=getattr(settings, "num_ctx", 4096),
+    )
 
 
 def opts_summarise_or_score() -> LLMOptions:
-    """
-    Medium token budget; still low temperature.
-    """
-    return LLMOptions(temperature=0.2, num_predict=450, num_ctx=4096)
+    return LLMOptions(
+        temperature=0.2,
+        num_predict=450,
+        num_ctx=getattr(settings, "num_ctx", 4096),
+    )
