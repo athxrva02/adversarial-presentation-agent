@@ -4,10 +4,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # LLM
     ollama_base_url: str = "http://localhost:11434"
-    model_name: str = "mistral"
-    temperature: float = 0.7
-    max_tokens: int = 1024
-
+    model_name: str = "qwen2.5:7b-instruct"
+    temperature: float = 0.2
+    num_ctx: int = 4096          # important on 16GB RAM
+    max_tokens: int = 400        # default generation cap (override per task if needed)
+                                 # 1024 tokens encourages slow, rambling outputs and increases the chance of JSON drift
+    
     # Embeddings
     embedding_model: str = "all-MiniLM-L6-v2"
 
