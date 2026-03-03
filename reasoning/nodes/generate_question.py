@@ -40,7 +40,7 @@ def _clean_question(text: str) -> str:
     # Ensure it ends with a question mark if it's clearly a question without one
     if first and not first.endswith("?") and ("?" in first) is False:
         # Don't force '?' if the model produced something that isn't a question.
-        # But usually you want it to be a question.
+        # But usually we want it to be a question.
         # We'll add '?' if it begins with typical interrogatives.
         lowers = first.lower()
         if lowers.startswith(("why", "how", "what", "which", "when", "where", "who", "can", "could", "would", "do", "does", "did", "is", "are", "was", "were", "should")):

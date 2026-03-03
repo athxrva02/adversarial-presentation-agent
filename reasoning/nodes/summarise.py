@@ -74,7 +74,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         contradictions_detected=contradictions_detected,
     )
 
-    # You may optionally store the extra LLM fields in score_breakdown or similar,
+    # Optionally store the extra LLM fields in score_breakdown or similar,
     # but keep SessionRecord schema clean and stable.
     score_breakdown = {
         "key_claims": (raw.get("key_claims") or []) if isinstance(raw, dict) else [],
