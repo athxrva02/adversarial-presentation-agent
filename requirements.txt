@@ -1,5 +1,6 @@
 ollama
 langchain
+langchain-ollama
 langchain-community
 langgraph
 chromadb
