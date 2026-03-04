@@ -9,7 +9,7 @@ Refer to `docs/technical-plan.md` for the full technical documentation.
 ### 1. Create a virtual environment (Python 3.12)
 
 ```bash
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
