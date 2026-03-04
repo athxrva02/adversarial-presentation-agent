@@ -61,3 +61,6 @@ class SessionState(TypedDict, total=False):
 
     # Control flags
     session_active: bool
+
+    # Internal: injected MemoryModule reference (not serialised)
+    _memory_module: Optional[Any]
