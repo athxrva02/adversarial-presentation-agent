@@ -46,12 +46,15 @@ def run(state: SessionState) -> Dict[str, Any]:
         turns=turns,
     )
 
-    raw = call_llm_structured(
-        system_prompt=prompt["system"],
-        user_prompt=prompt["user"],
-        schema_hint=SCORING_SCHEMA_HINT,
-        options=opts_summarise_or_score(),
-    )
+    try:
+        raw = call_llm_structured(
+            system_prompt=prompt["system"],
+            user_prompt=prompt["user"],
+            schema_hint=SCORING_SCHEMA_HINT,
+            options=opts_summarise_or_score(),
+        )
+    except Exception:
+        raw = {}  # fall through to defaults — session results still display
 
     # Parse outputs defensively
     overall_score = _clamp_score(raw.get("overall_score", 0.0)) if isinstance(raw, dict) else 0.0

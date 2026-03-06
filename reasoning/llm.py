@@ -174,6 +174,6 @@ def opts_judge_or_classify() -> LLMOptions:
 def opts_summarise_or_score() -> LLMOptions:
     return LLMOptions(
         temperature=0.2,
-        num_predict=450,
+        num_predict=900,       # summarise/score JSON is large; 450 truncates mid-output
         num_ctx=getattr(settings, "num_ctx", 4096),
     )
