@@ -65,7 +65,7 @@ class MemoryModule:
         # Build session ordering for recency weighting (newest = age 0)
         all_sessions = self._rel.get_all_sessions()
         ordered = list(reversed(all_sessions))  # newest first
-        session_order = {s.session_id: i for i, s in enumerate(ordered)}
+        session_order = {s["session_id"]: i for i, s in enumerate(ordered)}
 
         return merge_and_rank(
             document_chunks=chunks,
