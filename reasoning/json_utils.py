@@ -123,19 +123,76 @@ def extract_first_json(text: str) -> str:
     return cleaned[span[0] : span[1]].strip()
 
 
+def _repair_unescaped_quotes(text: str) -> str:
+    """
+    Fix the most common LLM JSON mistake: unescaped double-quotes inside
+    string values.  e.g.  "reasoning": "The user said "short term""
+    becomes               "reasoning": "The user said \\"short term\\""
+
+    Strategy: walk the JSON character by character tracking whether we are
+    inside a string.  Any '"' that would otherwise be treated as a string
+    delimiter while we are already inside a string is escaped.
+    This is safe to call on already-valid JSON because it only touches
+    quotes that are structurally invalid.
+    """
+    result: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and in_string:
+            # pass through escape sequences unchanged
+            result.append(ch)
+            i += 1
+            if i < len(text):
+                result.append(text[i])
+                i += 1
+            continue
+        if ch == '"':
+            if not in_string:
+                in_string = True
+                result.append(ch)
+            else:
+                # Peek ahead: is this a structural closing quote?
+                # It is structural if the next non-whitespace char is one of
+                # :  ,  }  ]  (i.e. valid JSON token boundaries)
+                j = i + 1
+                while j < len(text) and text[j] in " \t\r\n":
+                    j += 1
+                next_ch = text[j] if j < len(text) else ""
+                if next_ch in (",", "}", "]", ":"):
+                    in_string = False
+                    result.append(ch)
+                else:
+                    # This quote is inside the string value — escape it
+                    result.append('\\"')
+        else:
+            result.append(ch)
+        i += 1
+    return "".join(result)
+
+
 def parse_json(text: str) -> Any:
     """
     Parse JSON from text, extracting it first if needed.
+    Attempts automatic repair for the most common LLM mistake (unescaped
+    inner quotes) before raising.
     Raises JSONParseError with a useful message on failure.
     """
     candidate = extract_first_json(text)
     try:
         return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass  # try repair below
+
+    # Repair: escape unescaped quotes inside string values
+    try:
+        repaired = _repair_unescaped_quotes(candidate)
+        return json.loads(repaired)
     except json.JSONDecodeError as e:
-        # Provide context near the error position for easier debugging
         start = max(e.pos - 60, 0)
-        end = min(e.pos + 60, len(candidate))
-        snippet = candidate[start:end].replace("\n", "\\n")
+        end = min(e.pos + 60, len(repaired))
+        snippet = repaired[start:end].replace("\n", "\\n")
         raise JSONParseError(
             f"JSON decoding failed: {e.msg} at pos {e.pos}. "
             f"Nearby snippet: '{snippet}'"

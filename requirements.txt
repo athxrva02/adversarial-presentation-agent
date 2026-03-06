@@ -8,6 +8,8 @@ sentence-transformers
 openai-whisper
 PyMuPDF
 gradio
+sounddevice
+numpy
 pydantic
 pydantic-settings
 pytest
