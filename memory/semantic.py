@@ -19,48 +19,76 @@ class SemanticMemory:
         self._rel = relational_store
 
     def store_pattern(self, pattern: SemanticPattern) -> None:
-        self._rel.upsert_semantic_pattern(pattern)
+        self._rel.upsert_pattern(pattern)
         self._vec.upsert(
-            _COLLECTION,
-            ids=[pattern.pattern_id],
             documents=[pattern.text],
             metadatas=[{
                 "category": pattern.category,
                 "confidence": pattern.confidence,
                 "status": pattern.status,
             }],
+            ids=[pattern.pattern_id],
+            collection_name=_COLLECTION,
         )
 
     def retrieve(self, query: str, top_k: int) -> list[SemanticPattern]:
-        results = self._vec.query(_COLLECTION, query, top_k)
+        results = self._vec.query(query, _COLLECTION, top_k)
         patterns: list[SemanticPattern] = []
         for r in results:
-            pattern = self._rel.get_pattern(r["id"])
-            if pattern is not None:
-                patterns.append(pattern)
+            meta = r.get("metadata", {})
+            try:
+                patterns.append(SemanticPattern(
+                    pattern_id=r["id"],
+                    category=meta.get("category", "unknown"),
+                    text=r.get("document", ""),
+                    confidence=float(meta.get("confidence", 0.5)),
+                    direction="stable",
+                    first_seen="",
+                    last_updated="",
+                    session_count=1,
+                    status=meta.get("status", "active"),
+                    evidence=[],
+                ))
+            except Exception:
+                continue
         return patterns
 
     def get_active(self) -> list[SemanticPattern]:
-        return self._rel.get_semantic_patterns(status="active")
+        rows = self._rel.get_all_patterns(status="active")
+        patterns = []
+        for d in rows:
+            try:
+                patterns.append(SemanticPattern(
+                    pattern_id=d["pattern_id"],
+                    category=d.get("category", "unknown"),
+                    text=d.get("text", ""),
+                    confidence=float(d.get("confidence", 0.5)),
+                    direction=d.get("direction", "stable"),
+                    first_seen=d.get("first_seen", ""),
+                    last_updated=d.get("last_updated", ""),
+                    session_count=int(d.get("session_count", 1)),
+                    status=d.get("status", "active"),
+                    evidence=d.get("evidence", []),
+                ))
+            except Exception:
+                continue
+        return patterns
 
     def promote(self, session_id: str) -> list[SemanticPattern]:
-        """Scan all claims across sessions. If an alignment value appears in
-        >= promotion_threshold distinct sessions, create or update a pattern.
-        """
-        all_claims = self._rel.get_all_claims()
-        if not all_claims:
+        all_claim_dicts = self._rel.get_recent_claims(limit=1000)
+        if not all_claim_dicts:
             return []
 
-        # Group claim alignment values by distinct sessions
-        # alignment_value -> set of session_ids
         alignment_sessions: dict[str, set[str]] = defaultdict(set)
-        # alignment_value -> list of (claim_id, claim_text)
         alignment_evidence: dict[str, list[tuple[str, str]]] = defaultdict(list)
 
-        for claim in all_claims:
-            aval = claim.alignment.value
-            alignment_sessions[aval].add(claim.session_id)
-            alignment_evidence[aval].append((claim.claim_id, claim.claim_text))
+        for claim in all_claim_dicts:
+            aval = claim.get("alignment", "novel")
+            sid = claim.get("session_id", "")
+            cid = claim.get("claim_id", "")
+            ctext = claim.get("claim_text", "")
+            alignment_sessions[aval].add(sid)
+            alignment_evidence[aval].append((cid, ctext))
 
         threshold = settings.promotion_threshold
         promoted: list[SemanticPattern] = []
@@ -70,7 +98,9 @@ class SemanticMemory:
                 continue
 
             pattern_id = f"sp_{alignment_val}"
-            existing = self._rel.get_pattern(pattern_id)
+            existing_rows = self._rel.get_all_patterns(status=None)
+            existing = next((d for d in existing_rows if d["pattern_id"] == pattern_id), None)
+
             evidence_ids = [cid for cid, _ in alignment_evidence[alignment_val]]
             representative_text = alignment_evidence[alignment_val][0][1]
 
@@ -78,10 +108,10 @@ class SemanticMemory:
                 updated = SemanticPattern(
                     pattern_id=pattern_id,
                     category=alignment_val,
-                    text=existing.text,
-                    confidence=min(0.95, existing.confidence + 0.05),
-                    direction=existing.direction,
-                    first_seen=existing.first_seen,
+                    text=existing["text"],
+                    confidence=min(0.95, float(existing["confidence"]) + 0.05),
+                    direction=existing.get("direction", "stable"),
+                    first_seen=existing.get("first_seen", session_id),
                     last_updated=session_id,
                     session_count=len(sessions),
                     status="active",
