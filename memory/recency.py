@@ -1,5 +1,5 @@
 """
-Recency-weighted retrieval for the Episodic Memory store (Member C — Week 3).
+Recency-weighted retrieval for the Episodic Memory store
 
 Implements temporal decay as described in the technical plan:
     score = similarity_score * decay_factor ^ session_age

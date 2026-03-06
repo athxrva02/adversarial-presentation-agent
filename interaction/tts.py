@@ -1,8 +1,13 @@
 """
 Text-to-Speech for the Adversarial Presentation Agent.
 
-Primary:  macOS `say` command (zero dependencies, built-in on every Mac)
-Fallback: pyttsx3 (cross-platform, pip install pyttsx3)
+Backend selection (tried in order):
+  1. macOS   — `say` command (built-in, zero deps)
+  2. Windows — `powershell` SAPI via PowerShell (built-in, zero deps)
+  3. Linux   — `espeak` or `espeak-ng` (common on Ubuntu/Debian; apt install espeak)
+  4. pyttsx3 — cross-platform Python wrapper (pip install pyttsx3)
+
+All backends are tried silently. If none is available the call is a no-op.
 
 Public API:
     speak(text: str) -> None   — speaks text, blocks until done
@@ -12,20 +17,47 @@ Public API:
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
+import platform
 import shutil
+import subprocess
 
 logger = logging.getLogger(__name__)
 
-# macOS voice — change to any voice from `say -v ?`
-_MACOS_VOICE = "Samantha"
+_SYSTEM = platform.system()  # "Darwin" | "Windows" | "Linux"
 
+
+# ---------------------------------------------------------------------------
+# Platform-specific backends
+# ---------------------------------------------------------------------------
 
 def _speak_macos(text: str) -> None:
-    """Speak using macOS built-in `say` command."""
+    """macOS built-in `say` command."""
     subprocess.run(
-        ["say", "-v", _MACOS_VOICE, text],
+        ["say", text],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _speak_windows(text: str) -> None:
+    """Windows built-in SAPI via PowerShell — no extra installs needed."""
+    # Escape single quotes so the inline PS string is safe
+    safe = text.replace("'", "''")
+    script = f"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{safe}')"
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command", script],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _speak_espeak(text: str) -> None:
+    """Linux espeak / espeak-ng (install: sudo apt install espeak-ng)."""
+    cmd = "espeak-ng" if shutil.which("espeak-ng") else "espeak"
+    subprocess.run(
+        [cmd, text],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -33,7 +65,7 @@ def _speak_macos(text: str) -> None:
 
 
 def _speak_pyttsx3(text: str) -> None:
-    """Speak using pyttsx3 (cross-platform fallback)."""
+    """Cross-platform Python TTS wrapper (pip install pyttsx3)."""
     import pyttsx3  # type: ignore
     engine = pyttsx3.init()
     engine.setProperty("rate", 175)
@@ -41,34 +73,59 @@ def _speak_pyttsx3(text: str) -> None:
     engine.runAndWait()
 
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def tts_available() -> bool:
-    """Return True if any TTS backend is available."""
-    if shutil.which("say"):
+    """Return True if any TTS backend is available on this platform."""
+    if _SYSTEM == "Darwin" and shutil.which("say"):
+        return True
+    if _SYSTEM == "Windows" and shutil.which("powershell"):
+        return True
+    if _SYSTEM == "Linux" and (shutil.which("espeak-ng") or shutil.which("espeak")):
         return True
     try:
         import pyttsx3  # noqa: F401
         return True
     except ImportError:
-        return False
+        pass
+    return False
 
 
 def speak(text: str) -> None:
     """
-    Speak text aloud. Blocks until speech finishes.
-    Silently skips if no TTS backend is available.
+    Speak text aloud using the best available backend.
+    Blocks until speech finishes. Silently skips if no backend is available.
     """
     if not text or not text.strip():
         return
 
-    # Try macOS say first
-    if shutil.which("say"):
+    # 1. macOS
+    if _SYSTEM == "Darwin" and shutil.which("say"):
         try:
             _speak_macos(text)
             return
         except Exception as e:
             logger.warning("macOS say failed: %s", e)
 
-    # Try pyttsx3
+    # 2. Windows PowerShell SAPI
+    if _SYSTEM == "Windows" and shutil.which("powershell"):
+        try:
+            _speak_windows(text)
+            return
+        except Exception as e:
+            logger.warning("Windows SAPI failed: %s", e)
+
+    # 3. Linux espeak / espeak-ng
+    if _SYSTEM == "Linux" and (shutil.which("espeak-ng") or shutil.which("espeak")):
+        try:
+            _speak_espeak(text)
+            return
+        except Exception as e:
+            logger.warning("espeak failed: %s", e)
+
+    # 4. pyttsx3 (any platform, pip install pyttsx3)
     try:
         _speak_pyttsx3(text)
         return
@@ -77,5 +134,4 @@ def speak(text: str) -> None:
     except Exception as e:
         logger.warning("pyttsx3 failed: %s", e)
 
-    # Silent fallback — just log
     logger.info("TTS unavailable — would have spoken: %s", text[:80])
