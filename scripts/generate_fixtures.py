@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate sample test fixtures for Member C testing.
+Generate sample test fixtures for testing.
 
 Creates:
     tests/fixtures/sample.wav           — 3s spoken-like WAV (sine wave)

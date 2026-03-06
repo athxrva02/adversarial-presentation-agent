@@ -247,8 +247,7 @@ def run_session(
     receipt_msg = (
         "I have received and processed your documents. "
         "Whenever you are ready, please go ahead and give your presentation. "
-        "Take two to three minutes. Press Enter to start speaking, "
-        "then press Enter again when you are done."
+        "Press Enter to start speaking, then press Enter again when you are done."
     )
     _section("Phase 2 — Your Presentation")
     _speak(receipt_msg, voice)

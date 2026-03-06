@@ -45,7 +45,13 @@ Everything runs locally. No data leaves your machine.
 git clone <repo-url>
 cd adversarial-presentation-agent
 python3 -m venv .venv
+
+# macOS / Linux
 source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
 pip install -r requirements.txt
 ```
 
@@ -59,6 +65,8 @@ brew install ollama
 
 # Linux
 curl -fsSL https://ollama.com/install.sh | sh
+
+# Windows — download the installer from https://ollama.com/download
 
 # Start the server (keep this terminal open)
 ollama serve
@@ -75,13 +83,33 @@ brew install ffmpeg
 
 # Ubuntu / Debian
 sudo apt install ffmpeg
+
+# Windows — download from https://ffmpeg.org/download.html and add to PATH
+# or via winget:
+winget install ffmpeg
 ```
 
 ### 4. Install sounddevice (required for microphone input)
 
 ```bash
 pip install sounddevice
+
+# Linux also requires PortAudio:
+sudo apt install libportaudio2
 ```
+
+### 5. TTS setup (optional — for voice output)
+
+The agent can speak its questions and feedback aloud. Backend used depends on your OS:
+
+| OS | Backend | Setup needed |
+|---|---|---|
+| macOS | built-in `say` | nothing |
+| Windows | built-in PowerShell SAPI | nothing |
+| Linux | `espeak-ng` | `sudo apt install espeak-ng` |
+| Any | `pyttsx3` | `pip install pyttsx3` (fallback) |
+
+Voice output is on by default. To disable it, pass `--no-voice`.
 
 ---
 
@@ -92,8 +120,6 @@ pip install sounddevice
 ```bash
 python demo.py --pdf path/to/your_slides.pdf
 ```
-
-The agent speaks all its lines using the built-in macOS `say` command (voice `Samantha`). No extra setup needed on macOS.
 
 ### Disable agent voice (text-only output)
 
@@ -184,16 +210,22 @@ ollama serve   # in a separate terminal
 pip install openai-whisper
 ```
 
-**Mic level too low / no speech detected** — Your microphone may be muted or not selected as the default input device. Check System Settings → Sound → Input on macOS. You can also list devices:
+**Mic level too low / no speech detected**
+
+List available devices to find the right input:
 ```bash
 python3 -c "import sounddevice; print(sounddevice.query_devices())"
 ```
 
-**Agent voice not working** — On macOS, `say` is built in and requires no setup. To verify:
-```bash
-say -v Samantha "hello"
-```
-To change the voice, edit `_MACOS_VOICE` in `interaction/tts.py`.
+- **macOS**: System Settings → Privacy & Security → Microphone → enable Terminal/iTerm
+- **Windows**: Settings → Privacy → Microphone → allow access; Settings → System → Sound → Input → choose your mic
+- **Linux**: Check PulseAudio/PipeWire is not muted (`pavucontrol`); ensure `libportaudio2` is installed
+
+**Agent voice not working**
+
+- **macOS**: `say "hello"` in Terminal — should work out of the box
+- **Windows**: PowerShell SAPI is built in; if it fails, try `pip install pyttsx3`
+- **Linux**: `sudo apt install espeak-ng`, then `espeak-ng "hello"` to verify
 
 **`Failed to send telemetry event`** — Harmless ChromaDB warning, ignore it.
 
@@ -203,10 +235,10 @@ To change the voice, edit `_MACOS_VOICE` in `interaction/tts.py`.
 
 ```bash
 # Unit tests — no Ollama, no mic, no Whisper needed
-pytest tests/test_stt.py tests/test_pdf_parser.py tests/test_storage.py -v
+pytest tests/interaction/ tests/storage/ -v
 
-# Full pipeline tests — real ChromaDB + sentence-transformers
-pytest tests/test_pipeline_e2e.py -v
+# Memory + full pipeline tests — real ChromaDB + sentence-transformers
+pytest tests/memory/ -v
 
 # All tests including live LLM calls (requires Ollama running)
 pytest tests/ -v -m live
@@ -225,7 +257,7 @@ adversarial-presentation-agent/
 ├── interaction/
 │   ├── pdf_parser.py     ← PDF → DocumentChunk pipeline
 │   ├── stt.py            ← Whisper speech-to-text wrapper
-│   ├── tts.py            ← macOS say / pyttsx3 text-to-speech
+│   ├── tts.py            ← TTS: macOS say / Windows SAPI / Linux espeak / pyttsx3
 │   └── mic.py            ← Microphone recording (sounddevice)
 │
 ├── memory/
@@ -274,10 +306,3 @@ Example `.env`:
 ```env
 MODEL_NAME=qwen2.5:0.5b-instruct
 ```
-
-To change the agent's voice, edit `_MACOS_VOICE` in `interaction/tts.py`:
-```python
-_MACOS_VOICE = "Daniel"   # British English
-_MACOS_VOICE = "Karen"    # Australian English
-```
-List all available voices: `say -v ?`
