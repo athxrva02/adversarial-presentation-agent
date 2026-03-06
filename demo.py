@@ -17,6 +17,10 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Suppress ChromaDB telemetry — the capture() signature changed and it spams stderr
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("CHROMA_TELEMETRY", "False")
+
 RESET = "\033[0m"; BOLD = "\033[1m"; CYAN = "\033[96m"; RED = "\033[91m"; DIM = "\033[2m"
 
 
