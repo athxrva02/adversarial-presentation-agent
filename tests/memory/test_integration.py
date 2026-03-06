@@ -1,8 +1,7 @@
 """
 Integration test: input → question → memory write → retrieval.
 
-Covers Member C's Week 1 pipeline wired into the full session graph (Member D's
-SessionRunner), giving the team a single runnable proof that all four layers
+A single runnable proof that all four layers
 talk to each other correctly.
 
 What is tested end-to-end:
