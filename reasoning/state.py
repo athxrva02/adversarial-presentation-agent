@@ -41,6 +41,8 @@ class SessionState(TypedDict, total=False):
 
     # Contradiction module I/O
     conflict_result: Optional[ConflictResult]
+    conflict_prior_claim_id: Optional[str]
+
 
     # Accumulated session data
     # A list of turn dicts, e.g. {"role": "user"|"assistant", "content": "...", ...}
