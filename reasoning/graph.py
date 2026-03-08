@@ -18,13 +18,17 @@ from uuid import uuid4
 
 from langgraph.graph import StateGraph, END
 
-from storage.schemas import SessionRecord
 from reasoning.state import SessionState
 from reasoning.nodes.classify import run as classify_run
 from reasoning.nodes.retrieve import run as retrieve_run
 from reasoning.nodes.generate_question import run as generate_question_run
 from reasoning.nodes.summarise import run as summarise_run
 from reasoning.nodes.score import run as score_run
+from reasoning.edges import route_after_classification
+from reasoning.nodes.detect_contradiction import run as detect_contradiction_run
+from reasoning.nodes.negotiate import run as negotiate_run
+from storage.schemas import CommonGroundEntry, SemanticPattern, SessionRecord
+from reasoning.nodes.mediate_contradiction import run as mediate_contradiction_run
 
 
 def build_practice_graph():
@@ -37,13 +41,25 @@ def build_practice_graph():
     g = StateGraph(SessionState)
     g.add_node("classify", classify_run)
     g.add_node("retrieve", retrieve_run)
+    g.add_node("detect_contradiction", detect_contradiction_run)
     g.add_node("generate_question", generate_question_run)
+    g.add_node("mediate_contradiction", mediate_contradiction_run)
 
     g.set_entry_point("classify")
     g.add_edge("classify", "retrieve")
-    g.add_edge("retrieve", "generate_question")
+    g.add_edge("retrieve", "detect_contradiction")
+    g.add_conditional_edges(
+        "detect_contradiction",
+        route_after_classification,
+        {
+            "probe_weak": "generate_question",
+            "escalate_contradiction": "mediate_contradiction",
+            "request_evidence": "generate_question",
+            "redirect": "generate_question",
+        },
+    )
+    g.add_edge("mediate_contradiction", END)
     g.add_edge("generate_question", END)
-
     return g.compile()
 
 
@@ -56,10 +72,12 @@ def build_session_end_graph():
     g = StateGraph(SessionState)
     g.add_node("summarise", summarise_run)
     g.add_node("score", score_run)
+    g.add_node("negotiate", negotiate_run)
 
     g.set_entry_point("summarise")
     g.add_edge("summarise", "score")
-    g.add_edge("score", END)
+    g.add_edge("score", "negotiate")
+    g.add_edge("negotiate", END)
 
     return g.compile()
 
@@ -105,6 +123,7 @@ class SessionRunner:
             "session_active": True,
 
             "_memory_module": memory_module,
+            "conflict_prior_claim_id": None,
         }
 
         self._started_at = datetime.now()
@@ -126,33 +145,116 @@ class SessionRunner:
             )
 
     def handle_user_input(self, text: str) -> str:
-        """
-        Process a single practice turn and return the agent's next question.
-        """
         if not self.state.get("session_active", True):
             raise RuntimeError("Session is not active. Start a new SessionRunner.")
 
         self.state["turn_number"] = int(self.state.get("turn_number", 0)) + 1
         self.state["user_input"] = text
+        current_turn = self.state["turn_number"]
 
-        # Track turns (for summarisation/scoring later)
         self.state["turns"].append({"role": "user", "content": text})
 
-        # Run one practice step (includes retrieve node if memory_module set)
         out: Dict[str, Any] = self.practice_graph.invoke(self.state)
+
+        claims = list(out.get("claims", []))
+        prior_conflict_id = out.get("conflict_prior_claim_id")
+
+        if prior_conflict_id:
+            patched_claims = []
+            for c in claims:
+                if getattr(c, "turn_number", None) == current_turn and not getattr(c, "prior_conflict", None):
+                    patched_claims.append(c.model_copy(update={"prior_conflict": prior_conflict_id}))
+                else:
+                    patched_claims.append(c)
+            claims = patched_claims
+            out["claims"] = claims
+
         self.state.update(out)
 
-        # Persist new claims from this turn
         if self._memory is not None:
-            for claim in out.get("claims", []):
-                self._memory.store_claim(claim)
+            for claim in claims:
+                if getattr(claim, "turn_number", None) == current_turn:
+                    self._memory.store_claim(claim)
 
-        # Store assistant question in turn history too
         agent_resp = (out.get("agent_response") or "").strip()
         if agent_resp:
             self.state["turns"].append({"role": "assistant", "content": agent_resp})
 
         return agent_resp
+
+    def commit_negotiation(self, decisions: list[dict[str, Any]]) -> None:
+        self.state["negotiation_decisions"] = decisions
+
+        if self._memory is None:
+            return
+
+        items = {
+            i.get("item_id"): i
+            for i in (self.state.get("negotiation_items") or [])
+            if isinstance(i, dict) and i.get("item_id")
+        }
+
+        session_id = self.state.get("session_id", "unknown_session")
+
+        for d in decisions:
+            item = items.get(d.get("item_id"))
+            if item is None:
+                continue
+
+            decision = str(d.get("decision", "reject")).lower()
+            if decision not in {"accept", "update"}:
+                continue
+
+            kind = str(item.get("kind", "")).lower()
+
+            if kind in {"semantic_strength", "semantic_weakness"}:
+                pattern_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
+                if not pattern_text:
+                    continue
+                category = "strength" if kind == "semantic_strength" else "weakness"
+                try:
+                    confidence = float(item.get("confidence", 0.8))
+                except Exception:
+                    confidence = 0.8
+                evidence = item.get("evidence") or []
+                if not isinstance(evidence, list):
+                    evidence = []
+                pattern = SemanticPattern(
+                    pattern_id=str(item.get("pattern_id") or f"sp_{category}_{uuid4().hex[:10]}"),
+                    category=category,
+                    text=pattern_text,
+                    confidence=confidence,
+                    direction=str(item.get("direction") or "stable"),
+                    first_seen=str(item.get("first_seen") or session_id),
+                    last_updated=session_id,
+                    session_count=int(item.get("session_count", 1)),
+                    status=str(item.get("status") or "active"),
+                    evidence=evidence,
+                )
+                self._memory.store_semantic_pattern(pattern)
+                continue
+
+            if kind != "common_ground":
+                continue
+
+            negotiated_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
+            if not negotiated_text:
+                continue
+
+            base_version = int(item.get("version", 0) or 0)
+            entry_version = max(1, base_version + (1 if decision == "update" else 0))
+
+            entry = CommonGroundEntry(
+                cg_id=str(item.get("cg_id") or f"cg_{uuid4().hex[:12]}"),
+                pdf_chunk_ref=item.get("pdf_chunk_ref"),
+                original_text=item.get("original_text"),
+                negotiated_text=negotiated_text,
+                proposed_by=str(d.get("proposed_by") or item.get("proposed_by") or "agent"),
+                session_agreed=session_id,
+                version=entry_version,
+                timestamp=datetime.now(),
+            )
+            self._memory.store_common_ground(entry)
 
     def end_session(self) -> Any:
         """

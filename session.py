@@ -326,3 +326,133 @@ def run_session(
     print(DIM + "  Analysing session…" + RESET, flush=True)
     runner.end_session()
     _display_summary(runner, voice)
+    _run_negotiation_phase(runner, voice)
+
+  # ── Phase 6: Negotiation ──────────────────────────────────────────────────
+def _run_negotiation_phase(runner, voice: bool) -> None:
+    _section("Phase 6 — Negotiation")
+
+    items = runner.state.get("negotiation_items") or []
+    if not items:
+        _info("No negotiation items.")
+        return
+
+    contradiction_items = [
+        i for i in items
+        if str(i.get("source", "")).lower() == "conflict_result"
+    ]
+    other_items = [
+        i for i in items
+        if str(i.get("source", "")).lower() != "conflict_result"
+    ]
+
+    if contradiction_items:
+        _info(f"{len(contradiction_items)} contradiction item(s) to review.")
+    else:
+        _info("No contradictions detected.")
+    if other_items:
+        _info(f"{len(other_items)} additional coaching/memory item(s) to review.")
+
+    review_items = contradiction_items + other_items
+    decisions: list[dict] = []
+
+    kind_label = {
+        "common_ground": "Coaching note for next session",
+        "semantic_strength": "Strength to keep",
+        "semantic_weakness": "Improvement area to track",
+    }
+    action_label = {
+        "accept": "Accept as-is",
+        "reject": "Reject",
+        "clarify": "Needs your clarification",
+    }
+
+    print("  Review each suggestion and choose: [a] Accept, [r] Reject, [u] Update text, [c] Clarify")
+    for idx, item in enumerate(review_items, start=1):
+        print()
+        kind = str(item.get("kind", "")).lower()
+        source = str(item.get("source", "")).lower()
+        print(f"  [{idx}] {kind_label.get(kind, 'Session note')}")
+
+        if source == "conflict_result":
+            explanation = str(item.get("conflict_explanation") or item.get("proposed_text") or "").strip()
+            current_claim = str(item.get("current_claim", "")).strip()
+            past_claim = str(item.get("past_claim", "")).strip()
+            if explanation:
+                print(f"      Contradiction detected: {explanation}")
+            if current_claim:
+                print(f"      Current claim         : {current_claim}")
+            if past_claim:
+                print(f"      Past claim            : {past_claim}")
+        else:
+            print(f"      Proposed text         : {item.get('proposed_text', '').strip()}")
+
+        default_decision = str(item.get("default_decision", "clarify")).lower()
+        print(f"      Suggested action      : {action_label.get(default_decision, default_decision)}")
+
+        cmd = input("      decision (Enter=default): ").strip().lower()
+
+        if not cmd:
+            if default_decision == "clarify":
+                clarified = input("      clarified text (empty = reject): ").strip()
+                if clarified:
+                    decisions.append({
+                        "item_id": item["item_id"],
+                        "decision": "update",
+                        "updated_text": clarified,
+                        "proposed_by": "user",
+                    })
+                else:
+                    decisions.append({
+                        "item_id": item["item_id"],
+                        "decision": "reject",
+                    })
+                continue
+            decision = default_decision
+        elif cmd in {"a", "accept"}:
+            decision = "accept"
+        elif cmd in {"r", "reject"}:
+            decision = "reject"
+        elif cmd in {"c", "clarify"}:
+            clarified = input("      clarified text (empty = reject): ").strip()
+            if clarified:
+                decisions.append({
+                    "item_id": item["item_id"],
+                    "decision": "update",
+                    "updated_text": clarified,
+                    "proposed_by": "user",
+                })
+            else:
+                decisions.append({
+                    "item_id": item["item_id"],
+                    "decision": "reject",
+                })
+            continue
+        elif cmd in {"u", "update"}:
+            updated_text = input("      updated text: ").strip()
+            if not updated_text:
+                _warn("Empty update; saving as reject.")
+                decisions.append({
+                    "item_id": item["item_id"],
+                    "decision": "reject",
+                })
+                continue
+            decisions.append({
+                "item_id": item["item_id"],
+                "decision": "update",
+                "updated_text": updated_text,
+                "proposed_by": "user",
+            })
+            continue
+        else:
+            _warn("Invalid input; using default.")
+            decision = default_decision
+
+        decisions.append({
+            "item_id": item["item_id"],
+            "decision": decision,
+        })
+
+    runner.commit_negotiation(decisions)
+    kept = sum(1 for d in decisions if d.get("decision") in {"accept", "update"})
+    _ok(f"Negotiation saved. {kept}/{len(decisions)} items accepted/updated.")

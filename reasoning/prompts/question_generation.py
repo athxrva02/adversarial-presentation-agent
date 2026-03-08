@@ -29,6 +29,7 @@ def build_question_generation_prompt(
     utterance: str,
     memory_bundle: Optional[Any] = None,
     classification: Optional[Any] = None,
+    conflict_result: Optional[Any] = None,
 ) -> dict[str, str]:
     """
     Build system+user prompt for adversarial question generation.
@@ -50,6 +51,24 @@ def build_question_generation_prompt(
 
     context = render_memory_bundle(memory_bundle)
 
+    conflict_block = ""
+    if conflict_result is not None:
+        conflict_block = (
+            "CONFLICT_SIGNAL:\n"
+            f"- status: {getattr(conflict_result, 'status', None)}\n"
+            f"- action: {getattr(conflict_result, 'action', None)}\n"
+            f"- prior_claim: {getattr(conflict_result, 'prior_claim', None)}\n"
+            f"- explanation: {getattr(conflict_result, 'explanation', None)}\n\n"
+        )
+    else:
+        conflict_block = (
+            "CONFLICT_SIGNAL:\n"
+            "- status: no_conflict\n"
+            "- action: ignore\n"
+            "- prior_claim: null\n"
+            "- explanation: none\n\n"
+        )
+
     # Provide compact classification signal if available (helps focus).
     cls_block = ""
     if classification is not None:
@@ -68,6 +87,8 @@ def build_question_generation_prompt(
         )
 
     user = (
+        "0) If CONFLICT_SIGNAL.status is true_contradiction:\n"
+        "   - Ask a reconciliation question that forces the user to resolve the mismatch.\n"
         "Task: Ask exactly ONE adversarial follow-up question to the user's latest response.\n\n"
         "Strategy selection (pick ONE best):\n"
         "1) If the user's response is EVASION (dodging the previous question):\n"
@@ -88,6 +109,7 @@ def build_question_generation_prompt(
         "- Avoid generic 'can you elaborate' phrasing.\n"
         "- Do not mention internal modules, memory, embeddings, or scoring.\n\n"
         f"{context}\n"
+        f"{conflict_block}"
         f"{cls_block}"
         f"{safe_user_input_block(utterance)}\n"
         "Now output the single best follow-up question."

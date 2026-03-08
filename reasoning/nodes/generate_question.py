@@ -61,11 +61,13 @@ def run(state: SessionState) -> Dict[str, Any]:
     utterance = state.get("user_input", "")
     memory_bundle = state.get("memory_bundle")
     classification = state.get("classification")
+    conflict_result = state.get("conflict_result")
 
     prompt = build_question_generation_prompt(
         utterance=utterance,
         memory_bundle=memory_bundle,
         classification=classification,
+        conflict_result=conflict_result,
     )
 
     raw = call_llm_text(
