@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     text TEXT NOT NULL,
     position_in_pdf INTEGER,
     embedding_id TEXT,
+    source_file TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -155,8 +156,8 @@ class RelationalStore:
         conn.execute(
             """
             INSERT INTO document_chunks
-                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chunk.chunk_id,
@@ -165,6 +166,7 @@ class RelationalStore:
                 chunk.text,
                 chunk.position_in_pdf,
                 chunk.embedding_id,
+                chunk.source_file,
             ),
         )
         conn.commit()
@@ -177,11 +179,11 @@ class RelationalStore:
         conn.executemany(
             """
             INSERT OR IGNORE INTO document_chunks
-                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (c.chunk_id, c.slide_number, c.chunk_type, c.text, c.position_in_pdf, c.embedding_id)
+                (c.chunk_id, c.slide_number, c.chunk_type, c.text, c.position_in_pdf, c.embedding_id, c.source_file)
                 for c in chunks
             ],
         )

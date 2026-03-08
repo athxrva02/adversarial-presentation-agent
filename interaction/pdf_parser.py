@@ -284,6 +284,7 @@ def ingest_pdf(file_path: str) -> list:
                         text=chunk_text,
                         position_in_pdf=global_position,
                         embedding_id=None,  # set by vector store after embedding
+                        source_file=path.name,  # basename for re-upload detection
                     )
                 )
 

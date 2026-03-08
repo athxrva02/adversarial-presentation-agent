@@ -185,11 +185,11 @@ def filter_resolved_contradictions(results: list[dict]) -> list[dict]:
 def detect_pdf_reupload(new_pdf_path: str) -> bool:
     """
     Check whether a PDF with the same filename has already been ingested.
-    Returns True if the document appears to be a re-upload.
+    Returns True if a chunk with a matching source_file basename is found
+    in SQLite, indicating this PDF has been ingested before.
 
-    This is a lightweight check based on filename stored in SQLite metadata.
     The caller (UI or pipeline) should decide whether to clear and re-ingest
-    or skip ingestion.
+    or skip ingestion entirely.
     """
     import os
     new_name = os.path.basename(new_pdf_path)
@@ -197,15 +197,15 @@ def detect_pdf_reupload(new_pdf_path: str) -> bool:
         from storage.relational_store import get_relational_store  # type: ignore
         rs = get_relational_store()
         chunks = rs.get_all_chunks()
-        # We store the source PDF name in chunk_id prefix; check metadata instead
-        # For now, use a simple heuristic: if there are any chunks, warn the caller.
-        if chunks:
-            logger.info(
-                "PDF re-upload detected: %d chunks already stored. "
-                "DocumentMemory.store() will upsert safely.",
-                len(chunks),
-            )
-            return True
+        for chunk in chunks:
+            if chunk.get("source_file") == new_name:
+                logger.info(
+                    "PDF re-upload detected: '%s' already has %d chunk(s) stored. "
+                    "DocumentMemory.store() will upsert safely.",
+                    new_name,
+                    sum(1 for c in chunks if c.get("source_file") == new_name),
+                )
+                return True
     except Exception:
         pass
     return False

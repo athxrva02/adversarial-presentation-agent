@@ -6,6 +6,7 @@ from datetime import datetime
 from storage.schemas import ClaimRecord, SessionRecord
 from storage.vector_store import VectorStore
 from storage.relational_store import RelationalStore
+from memory.recency import annotate_with_session_index, get_current_session_index
 
 _CLAIMS_COLLECTION = "episodic_claims"
 _SESSIONS_COLLECTION = "episodic_sessions"
@@ -20,13 +21,15 @@ class EpisodicMemory:
 
     def store_claim(self, claim: ClaimRecord) -> None:
         self._rel.insert_claim(claim)
+        session_index = get_current_session_index()
+        metadata = annotate_with_session_index({
+            "session_id": claim.session_id,
+            "turn_number": claim.turn_number,
+            "alignment": claim.alignment.value,
+        }, session_index)
         self._vec.upsert(
             documents=[claim.claim_text],
-            metadatas=[{
-                "session_id": claim.session_id,
-                "turn_number": claim.turn_number,
-                "alignment": claim.alignment.value,
-            }],
+            metadatas=[metadata],
             ids=[claim.claim_id],
             collection_name=_CLAIMS_COLLECTION,
         )
@@ -37,21 +40,19 @@ class EpisodicMemory:
         self._rel.insert_session(session)
         for claim in claims:
             self.store_claim(claim)
-        score_str = f"{session.overall_score:.2f}" if session.overall_score is not None else "N/A"
         summary_text = (
             f"Session {session.session_id}. "
-            f"Score: {score_str}. "
-            f"Claims: {session.claims_count}. "
-            f"Contradictions: {session.contradictions_detected}. "
             f"Strengths: {', '.join(session.strengths)}. "
             f"Weaknesses: {', '.join(session.weaknesses)}."
         )
+        session_index = get_current_session_index()
+        metadata = annotate_with_session_index({
+            "session_id": session.session_id,
+            "overall_score": session.overall_score if session.overall_score is not None else 0.0,
+        }, session_index)
         self._vec.upsert(
             documents=[summary_text],
-            metadatas=[{
-                "session_id": session.session_id,
-                "overall_score": session.overall_score if session.overall_score is not None else 0.0,
-            }],
+            metadatas=[metadata],
             ids=[session.session_id],
             collection_name=_SESSIONS_COLLECTION,
         )
@@ -60,20 +61,9 @@ class EpisodicMemory:
         results = self._vec.query(query, _CLAIMS_COLLECTION, top_k)
         claims: list[ClaimRecord] = []
         for r in results:
-            meta = r.get("metadata", {})
-            try:
-                claims.append(ClaimRecord(
-                    claim_id=r["id"],
-                    session_id=meta.get("session_id", ""),
-                    turn_number=int(meta.get("turn_number", 0)),
-                    claim_text=r.get("document", ""),
-                    alignment=meta.get("alignment", "novel"),
-                    mapped_to_slide=None,
-                    prior_conflict=None,
-                    timestamp=datetime.now(),
-                ))
-            except Exception:
-                continue
+            claim = self._rel.get_claim(r["id"])
+            if claim is not None:
+                claims.append(claim)
         return claims
 
     def retrieve_sessions(self, query: str, top_k: int) -> list[SessionRecord]:
