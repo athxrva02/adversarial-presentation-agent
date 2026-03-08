@@ -160,7 +160,7 @@ def _repair_unescaped_quotes(text: str) -> str:
                 while j < len(text) and text[j] in " \t\r\n":
                     j += 1
                 next_ch = text[j] if j < len(text) else ""
-                if next_ch in (",", "}", "]", ":"):
+                if next_ch in (",", "}", "]"):
                     in_string = False
                     result.append(ch)
                 else:

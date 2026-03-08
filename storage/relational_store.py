@@ -127,7 +127,7 @@ class RelationalStore:
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+            os.makedirs(os.path.dirname(os.path.abspath(self._db_path)), exist_ok=True)
             self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL;")
@@ -293,27 +293,12 @@ class RelationalStore:
         )
         conn.commit()
 
-    def insert_claims(self, claims: list) -> None:
-        if not claims:
-            return
+    def get_claim(self, claim_id: str) -> Optional[dict]:
         conn = self._get_conn()
-        conn.executemany(
-            """
-            INSERT OR IGNORE INTO claim_records
-                (claim_id, session_id, turn_number, claim_text, alignment,
-                 mapped_to_slide, prior_conflict, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    c.claim_id, c.session_id, c.turn_number, c.claim_text,
-                    str(c.alignment.value if hasattr(c.alignment, "value") else c.alignment),
-                    c.mapped_to_slide, c.prior_conflict, _to_iso(c.timestamp),
-                )
-                for c in claims
-            ],
-        )
-        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM claim_records WHERE claim_id = ?", (claim_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
     def get_claims_for_session(self, session_id: str) -> list[dict]:
         conn = self._get_conn()

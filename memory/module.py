@@ -64,8 +64,7 @@ class MemoryModule:
 
         # Build session ordering for recency weighting (newest = age 0)
         all_sessions = self._rel.get_all_sessions()
-        ordered = list(reversed(all_sessions))  # newest first
-        session_order = {s["session_id"]: i for i, s in enumerate(ordered)}
+        session_order = {s["session_id"]: i for i, s in enumerate(all_sessions)}
 
         return merge_and_rank(
             document_chunks=chunks,
@@ -80,7 +79,7 @@ class MemoryModule:
     # ---- Storage ------------------------------------------------------------
 
     def store_document(self, chunk: DocumentChunk) -> None:
-        self._document.store(chunk)
+        self._document.store([chunk])
 
     def store_claim(self, claim: ClaimRecord) -> None:
         self._episodic.store_claim(claim)

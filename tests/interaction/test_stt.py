@@ -174,7 +174,7 @@ def _whisper_available() -> bool:
         return False
 
 
-FIXTURE_AUDIO = os.path.join(os.path.dirname(__file__), "fixtures", "sample.wav")
+FIXTURE_AUDIO = os.path.join(os.path.dirname(__file__), "..", "fixtures", "sample.wav")
 
 
 @pytest.mark.integration

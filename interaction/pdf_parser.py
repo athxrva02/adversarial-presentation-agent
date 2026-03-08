@@ -111,12 +111,11 @@ def _extract_pages(file_path: str) -> list[tuple[int, str]]:
             "PyMuPDF is not installed. Run: pip install PyMuPDF"
         ) from exc
 
-    doc = fitz.open(file_path)
-    pages: list[tuple[int, str]] = []
-    for i, page in enumerate(doc, start=1):
-        text = page.get_text("text") or ""
-        pages.append((i, text))
-    doc.close()
+    with fitz.open(file_path) as doc:
+        pages: list[tuple[int, str]] = []
+        for i, page in enumerate(doc, start=1):
+            text = page.get_text("text") or ""
+            pages.append((i, text))
     return pages
 
 

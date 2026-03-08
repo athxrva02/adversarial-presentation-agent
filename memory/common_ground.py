@@ -32,10 +32,10 @@ class CommonGroundMemory:
 
     def retrieve(self, query: str, top_k: int) -> list[CommonGroundEntry]:
         results = self._vec.query(query, _COLLECTION, top_k)
+        all_cg = {d["cg_id"]: d for d in self._rel.get_all_common_ground()}
         entries: list[CommonGroundEntry] = []
         for r in results:
-            all_cg = self._rel.get_all_common_ground()
-            match = next((d for d in all_cg if d.get("cg_id") == r["id"]), None)
+            match = all_cg.get(r["id"])
             if match:
                 try:
                     entries.append(CommonGroundEntry(

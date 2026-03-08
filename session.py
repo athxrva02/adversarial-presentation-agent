@@ -142,7 +142,8 @@ def _ingest_pdf(pdf_path: str, vs, rs) -> int:
     for c in chunks:
         type_counts[c.chunk_type] = type_counts.get(c.chunk_type, 0) + 1
 
-    _ok(f"Parsed {len(chunks)} chunks across {max(c.slide_number or 0 for c in chunks)} page(s)")
+    page_count = max((c.slide_number or 0 for c in chunks), default=0)
+    _ok(f"Parsed {len(chunks)} chunks across {page_count} page(s)")
     for t, n in sorted(type_counts.items()):
         _info(f"{t:12s}: {n}")
     return len(chunks)
