@@ -138,6 +138,17 @@ class RelationalStore:
     def _init_db(self) -> None:
         conn = self._get_conn()
         conn.executescript(_CREATE_TABLES_SQL)
+        # Migrations: add columns that didn't exist in earlier schema versions.
+        # ALTER TABLE ADD COLUMN is a no-op safe pattern — we catch the error if
+        # the column already exists (sqlite3 raises OperationalError in that case).
+        _migrations = [
+            "ALTER TABLE document_chunks ADD COLUMN source_file TEXT",
+        ]
+        for sql in _migrations:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # column already exists
         conn.commit()
         logger.info("SQLite database ready at '%s'.", self._db_path)
 
@@ -292,6 +303,28 @@ class RelationalStore:
                 claim.prior_conflict,
                 _to_iso(claim.timestamp),
             ),
+        )
+        conn.commit()
+
+    def insert_claims(self, claims: list) -> None:
+        if not claims:
+            return
+        conn = self._get_conn()
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO claim_records
+                (claim_id, session_id, turn_number, claim_text, alignment,
+                 mapped_to_slide, prior_conflict, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    c.claim_id, c.session_id, c.turn_number, c.claim_text,
+                    str(c.alignment.value if hasattr(c.alignment, "value") else c.alignment),
+                    c.mapped_to_slide, c.prior_conflict, _to_iso(c.timestamp),
+                )
+                for c in claims
+            ],
         )
         conn.commit()
 
