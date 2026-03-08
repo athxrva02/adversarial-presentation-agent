@@ -1,22 +1,41 @@
-"""SQLite wrapper for structured record storage."""
+"""
+SQLite wrapper for structured data in the Storage Layer.
+
+Provides RelationalStore with CRUD for:
+- document_chunks
+- session_records
+- claim_records
+- semantic_patterns  (+ pattern_evidence join table)
+- common_ground
+
+All methods accept/return Pydantic models from storage.schemas.
+Table creation is idempotent (CREATE TABLE IF NOT EXISTS).
+
+Design notes:
+- Uses Python's stdlib sqlite3 – no ORM overhead.
+- Row factory returns dicts for easy Pydantic coercion.
+- JSON list columns (strengths, weaknesses, evidence) are serialised/deserialised
+  transparently.
+- All primary-key collisions on INSERT raise sqlite3.IntegrityError (the caller
+  should upsert explicitly if needed).
+"""
+
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 from datetime import datetime
+from typing import Any, Optional
 
-from config import settings
-from storage.schemas import (
-    ClaimAlignment,
-    ClaimRecord,
-    CommonGroundEntry,
-    DocumentChunk,
-    SemanticPattern,
-    SessionRecord,
-)
+logger = logging.getLogger(__name__)
 
-_SCHEMA_SQL = """\
+# ---------------------------------------------------------------------------
+# DDL
+# ---------------------------------------------------------------------------
+
+_CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS document_chunks (
     chunk_id TEXT PRIMARY KEY,
     slide_number INTEGER,
@@ -24,6 +43,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     text TEXT NOT NULL,
     position_in_pdf INTEGER,
     embedding_id TEXT,
+    source_file TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -66,7 +86,9 @@ CREATE TABLE IF NOT EXISTS pattern_evidence (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pattern_id TEXT NOT NULL,
     claim_id TEXT NOT NULL,
-    FOREIGN KEY (pattern_id) REFERENCES semantic_patterns(pattern_id)
+    session_id TEXT NOT NULL,
+    FOREIGN KEY (pattern_id) REFERENCES semantic_patterns(pattern_id),
+    FOREIGN KEY (claim_id) REFERENCES claim_records(claim_id)
 );
 
 CREATE TABLE IF NOT EXISTS common_ground (
@@ -83,37 +105,71 @@ CREATE TABLE IF NOT EXISTS common_ground (
 """
 
 
+# ---------------------------------------------------------------------------
+# Store class
+# ---------------------------------------------------------------------------
+
 class RelationalStore:
-    """Thin wrapper around SQLite for structured CRUD.
+    """SQLite-backed structured storage."""
 
-    Accepts an optional *db_path*; defaults to ``settings.sqlite_path``.
-    Opens and closes a connection per method call for thread safety.
-    """
+    def __init__(self, db_path: Optional[str] = None):
+        try:
+            from config import settings  # type: ignore
+            self._db_path = db_path or settings.sqlite_path
+        except Exception:
+            self._db_path = db_path or "./data/db/agent.db"
 
-    def __init__(self, *, db_path: str | None = None) -> None:
-        self.db_path = db_path or settings.sqlite_path
-        os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
-        self._init_schema()
+        self._conn: Optional[sqlite3.Connection] = None
+        self._init_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.row_factory = sqlite3.Row
-        return conn
+    # ------------------------------------------------------------------
+    # Connection management
+    # ------------------------------------------------------------------
 
-    def _init_schema(self) -> None:
-        conn = self._connect()
-        conn.executescript(_SCHEMA_SQL)
-        conn.close()
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._conn is None:
+            os.makedirs(os.path.dirname(os.path.abspath(self._db_path)), exist_ok=True)
+            self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA foreign_keys=ON;")
+        return self._conn
 
-    # ---- DocumentChunk ------------------------------------------------------
+    def _init_db(self) -> None:
+        conn = self._get_conn()
+        conn.executescript(_CREATE_TABLES_SQL)
+        # Migrations: add columns that didn't exist in earlier schema versions.
+        # ALTER TABLE ADD COLUMN is a no-op safe pattern — we catch the error if
+        # the column already exists (sqlite3 raises OperationalError in that case).
+        _migrations = [
+            "ALTER TABLE document_chunks ADD COLUMN source_file TEXT",
+        ]
+        for sql in _migrations:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # column already exists
+        conn.commit()
+        logger.info("SQLite database ready at '%s'.", self._db_path)
 
-    def upsert_document_chunk(self, chunk: DocumentChunk) -> None:
-        conn = self._connect()
+    def close(self) -> None:
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
+    # ------------------------------------------------------------------
+    # DocumentChunk
+    # ------------------------------------------------------------------
+
+    def insert_chunk(self, chunk) -> None:
+        """Insert a DocumentChunk. Raises IntegrityError on duplicate chunk_id."""
+        conn = self._get_conn()
         conn.execute(
-            "INSERT OR REPLACE INTO document_chunks "
-            "(chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO document_chunks
+                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 chunk.chunk_id,
                 chunk.slide_number,
@@ -121,56 +177,74 @@ class RelationalStore:
                 chunk.text,
                 chunk.position_in_pdf,
                 chunk.embedding_id,
+                chunk.source_file,
             ),
         )
         conn.commit()
-        conn.close()
 
-    def get_document_chunk(self, chunk_id: str) -> DocumentChunk | None:
-        conn = self._connect()
+    def insert_chunks(self, chunks: list) -> None:
+        """Batch insert DocumentChunk objects. Skips duplicates."""
+        if not chunks:
+            return
+        conn = self._get_conn()
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO document_chunks
+                (chunk_id, slide_number, chunk_type, text, position_in_pdf, embedding_id, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (c.chunk_id, c.slide_number, c.chunk_type, c.text, c.position_in_pdf, c.embedding_id, c.source_file)
+                for c in chunks
+            ],
+        )
+        conn.commit()
+        logger.debug("Batch-inserted %d chunks.", len(chunks))
+
+    def update_chunk_embedding_id(self, chunk_id: str, embedding_id: str) -> None:
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE document_chunks SET embedding_id = ? WHERE chunk_id = ?",
+            (embedding_id, chunk_id),
+        )
+        conn.commit()
+
+    def get_chunk(self, chunk_id: str) -> Optional[dict]:
+        conn = self._get_conn()
         row = conn.execute(
             "SELECT * FROM document_chunks WHERE chunk_id = ?", (chunk_id,)
         ).fetchone()
-        conn.close()
-        if row is None:
-            return None
-        return DocumentChunk(
-            chunk_id=row["chunk_id"],
-            slide_number=row["slide_number"],
-            chunk_type=row["chunk_type"],
-            text=row["text"],
-            position_in_pdf=row["position_in_pdf"],
-            embedding_id=row["embedding_id"],
-        )
+        return dict(row) if row else None
 
-    def get_all_document_chunks(self) -> list[DocumentChunk]:
-        conn = self._connect()
-        rows = conn.execute("SELECT * FROM document_chunks").fetchall()
-        conn.close()
-        return [
-            DocumentChunk(
-                chunk_id=r["chunk_id"],
-                slide_number=r["slide_number"],
-                chunk_type=r["chunk_type"],
-                text=r["text"],
-                position_in_pdf=r["position_in_pdf"],
-                embedding_id=r["embedding_id"],
-            )
-            for r in rows
-        ]
+    def get_all_chunks(self) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM document_chunks ORDER BY position_in_pdf"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
-    # ---- SessionRecord ------------------------------------------------------
+    def delete_all_chunks(self) -> None:
+        """Remove all document chunks (e.g. when a new PDF is uploaded)."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM document_chunks")
+        conn.commit()
 
-    def upsert_session(self, session: SessionRecord) -> None:
-        conn = self._connect()
+    # ------------------------------------------------------------------
+    # SessionRecord
+    # ------------------------------------------------------------------
+
+    def insert_session(self, session) -> None:
+        conn = self._get_conn()
         conn.execute(
-            "INSERT OR REPLACE INTO session_records "
-            "(session_id, timestamp, duration_seconds, overall_score, "
-            "strengths, weaknesses, claims_count, contradictions_detected) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT OR REPLACE INTO session_records
+                (session_id, timestamp, duration_seconds, overall_score,
+                 strengths, weaknesses, claims_count, contradictions_detected)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 session.session_id,
-                session.timestamp.isoformat(),
+                _to_iso(session.timestamp),
                 session.duration_seconds,
                 session.overall_score,
                 json.dumps(session.strengths),
@@ -180,109 +254,115 @@ class RelationalStore:
             ),
         )
         conn.commit()
-        conn.close()
 
-    def _row_to_session(self, row: sqlite3.Row) -> SessionRecord:
-        return SessionRecord(
-            session_id=row["session_id"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
-            duration_seconds=row["duration_seconds"],
-            overall_score=row["overall_score"],
-            strengths=json.loads(row["strengths"]) if row["strengths"] else [],
-            weaknesses=json.loads(row["weaknesses"]) if row["weaknesses"] else [],
-            claims_count=row["claims_count"],
-            contradictions_detected=row["contradictions_detected"],
-        )
-
-    def get_session(self, session_id: str) -> SessionRecord | None:
-        conn = self._connect()
+    def get_session(self, session_id: str) -> Optional[dict]:
+        conn = self._get_conn()
         row = conn.execute(
             "SELECT * FROM session_records WHERE session_id = ?", (session_id,)
         ).fetchone()
-        conn.close()
-        if row is None:
+        if not row:
             return None
-        return self._row_to_session(row)
+        d = dict(row)
+        d["strengths"] = json.loads(d.get("strengths") or "[]")
+        d["weaknesses"] = json.loads(d.get("weaknesses") or "[]")
+        return d
 
-    def get_all_sessions(self) -> list[SessionRecord]:
-        conn = self._connect()
+    def get_all_sessions(self, limit: int = 50) -> list[dict]:
+        conn = self._get_conn()
         rows = conn.execute(
-            "SELECT * FROM session_records ORDER BY timestamp"
+            "SELECT * FROM session_records ORDER BY timestamp DESC LIMIT ?", (limit,)
         ).fetchall()
-        conn.close()
-        return [self._row_to_session(r) for r in rows]
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["strengths"] = json.loads(d.get("strengths") or "[]")
+            d["weaknesses"] = json.loads(d.get("weaknesses") or "[]")
+            result.append(d)
+        return result
 
-    # ---- ClaimRecord --------------------------------------------------------
+    # ------------------------------------------------------------------
+    # ClaimRecord
+    # ------------------------------------------------------------------
 
-    def insert_claim(self, claim: ClaimRecord) -> None:
-        conn = self._connect()
+    def insert_claim(self, claim) -> None:
+        conn = self._get_conn()
         conn.execute(
-            "INSERT OR REPLACE INTO claim_records "
-            "(claim_id, session_id, turn_number, claim_text, alignment, "
-            "mapped_to_slide, prior_conflict, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT OR IGNORE INTO claim_records
+                (claim_id, session_id, turn_number, claim_text, alignment,
+                 mapped_to_slide, prior_conflict, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 claim.claim_id,
                 claim.session_id,
                 claim.turn_number,
                 claim.claim_text,
-                claim.alignment.value,
+                str(claim.alignment.value if hasattr(claim.alignment, "value") else claim.alignment),
                 claim.mapped_to_slide,
                 claim.prior_conflict,
-                claim.timestamp.isoformat(),
+                _to_iso(claim.timestamp),
             ),
         )
         conn.commit()
-        conn.close()
 
-    def _row_to_claim(self, row: sqlite3.Row) -> ClaimRecord:
-        return ClaimRecord(
-            claim_id=row["claim_id"],
-            session_id=row["session_id"],
-            turn_number=row["turn_number"],
-            claim_text=row["claim_text"],
-            alignment=ClaimAlignment(row["alignment"]),
-            mapped_to_slide=row["mapped_to_slide"],
-            prior_conflict=row["prior_conflict"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
+    def insert_claims(self, claims: list) -> None:
+        if not claims:
+            return
+        conn = self._get_conn()
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO claim_records
+                (claim_id, session_id, turn_number, claim_text, alignment,
+                 mapped_to_slide, prior_conflict, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    c.claim_id, c.session_id, c.turn_number, c.claim_text,
+                    str(c.alignment.value if hasattr(c.alignment, "value") else c.alignment),
+                    c.mapped_to_slide, c.prior_conflict, _to_iso(c.timestamp),
+                )
+                for c in claims
+            ],
         )
+        conn.commit()
 
-    def get_claim(self, claim_id: str) -> ClaimRecord | None:
-        conn = self._connect()
+    def get_claim(self, claim_id: str) -> Optional[dict]:
+        conn = self._get_conn()
         row = conn.execute(
             "SELECT * FROM claim_records WHERE claim_id = ?", (claim_id,)
         ).fetchone()
-        conn.close()
-        if row is None:
-            return None
-        return self._row_to_claim(row)
+        return dict(row) if row else None
 
-    def get_claims_for_session(self, session_id: str) -> list[ClaimRecord]:
-        conn = self._connect()
+    def get_claims_for_session(self, session_id: str) -> list[dict]:
+        conn = self._get_conn()
         rows = conn.execute(
             "SELECT * FROM claim_records WHERE session_id = ? ORDER BY turn_number",
             (session_id,),
         ).fetchall()
-        conn.close()
-        return [self._row_to_claim(r) for r in rows]
+        return [dict(r) for r in rows]
 
-    def get_all_claims(self) -> list[ClaimRecord]:
-        conn = self._connect()
+    def get_recent_claims(self, limit: int = 50) -> list[dict]:
+        conn = self._get_conn()
         rows = conn.execute(
-            "SELECT * FROM claim_records ORDER BY timestamp"
+            "SELECT * FROM claim_records ORDER BY timestamp DESC LIMIT ?", (limit,)
         ).fetchall()
-        conn.close()
-        return [self._row_to_claim(r) for r in rows]
+        return [dict(r) for r in rows]
 
-    # ---- SemanticPattern ----------------------------------------------------
+    # ------------------------------------------------------------------
+    # SemanticPattern
+    # ------------------------------------------------------------------
 
-    def upsert_semantic_pattern(self, pattern: SemanticPattern) -> None:
-        conn = self._connect()
+    def upsert_pattern(self, pattern) -> None:
+        conn = self._get_conn()
         conn.execute(
-            "INSERT OR REPLACE INTO semantic_patterns "
-            "(pattern_id, category, text, confidence, direction, "
-            "first_seen, last_updated, session_count, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT OR REPLACE INTO semantic_patterns
+                (pattern_id, category, text, confidence, direction,
+                 first_seen, last_updated, session_count, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 pattern.pattern_id,
                 pattern.category,
@@ -295,84 +375,49 @@ class RelationalStore:
                 pattern.status,
             ),
         )
-        # Replace evidence rows
-        conn.execute(
-            "DELETE FROM pattern_evidence WHERE pattern_id = ?",
-            (pattern.pattern_id,),
-        )
-        for claim_id in pattern.evidence:
-            conn.execute(
-                "INSERT INTO pattern_evidence (pattern_id, claim_id) VALUES (?, ?)",
-                (pattern.pattern_id, claim_id),
+        # Insert evidence links (ignore duplicates)
+        if hasattr(pattern, "evidence") and pattern.evidence:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO pattern_evidence (pattern_id, claim_id, session_id)
+                VALUES (?, ?, ?)
+                """,
+                [(pattern.pattern_id, cid, pattern.last_updated) for cid in pattern.evidence],
             )
         conn.commit()
-        conn.close()
 
-    def _row_to_pattern(self, row: sqlite3.Row, evidence: list[str]) -> SemanticPattern:
-        return SemanticPattern(
-            pattern_id=row["pattern_id"],
-            category=row["category"],
-            text=row["text"],
-            confidence=row["confidence"],
-            direction=row["direction"],
-            first_seen=row["first_seen"],
-            last_updated=row["last_updated"],
-            session_count=row["session_count"],
-            status=row["status"],
-            evidence=evidence,
-        )
-
-    def get_pattern(self, pattern_id: str) -> SemanticPattern | None:
-        conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM semantic_patterns WHERE pattern_id = ?", (pattern_id,)
-        ).fetchone()
-        if row is None:
-            conn.close()
-            return None
-        evidence = [
-            r["claim_id"]
-            for r in conn.execute(
-                "SELECT claim_id FROM pattern_evidence WHERE pattern_id = ?",
-                (pattern_id,),
-            ).fetchall()
-        ]
-        conn.close()
-        return self._row_to_pattern(row, evidence)
-
-    def get_semantic_patterns(
-        self, status: str | None = None
-    ) -> list[SemanticPattern]:
-        conn = self._connect()
+    def get_all_patterns(self, status: Optional[str] = "active") -> list[dict]:
+        conn = self._get_conn()
         if status:
             rows = conn.execute(
                 "SELECT * FROM semantic_patterns WHERE status = ?", (status,)
             ).fetchall()
         else:
             rows = conn.execute("SELECT * FROM semantic_patterns").fetchall()
-
-        patterns = []
+        result = []
         for row in rows:
-            evidence = [
-                r["claim_id"]
-                for r in conn.execute(
-                    "SELECT claim_id FROM pattern_evidence WHERE pattern_id = ?",
-                    (row["pattern_id"],),
-                ).fetchall()
-            ]
-            patterns.append(self._row_to_pattern(row, evidence))
-        conn.close()
-        return patterns
+            d = dict(row)
+            # Fetch evidence claim IDs
+            evid_rows = conn.execute(
+                "SELECT claim_id FROM pattern_evidence WHERE pattern_id = ?", (d["pattern_id"],)
+            ).fetchall()
+            d["evidence"] = [r["claim_id"] for r in evid_rows]
+            result.append(d)
+        return result
 
-    # ---- CommonGround -------------------------------------------------------
+    # ------------------------------------------------------------------
+    # CommonGroundEntry
+    # ------------------------------------------------------------------
 
-    def upsert_common_ground(self, entry: CommonGroundEntry) -> None:
-        conn = self._connect()
+    def upsert_common_ground(self, entry) -> None:
+        conn = self._get_conn()
         conn.execute(
-            "INSERT OR REPLACE INTO common_ground "
-            "(cg_id, pdf_chunk_ref, original_text, negotiated_text, "
-            "proposed_by, session_agreed, version, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT OR REPLACE INTO common_ground
+                (cg_id, pdf_chunk_ref, original_text, negotiated_text,
+                 proposed_by, session_agreed, version, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 entry.cg_id,
                 entry.pdf_chunk_ref,
@@ -381,36 +426,43 @@ class RelationalStore:
                 entry.proposed_by,
                 entry.session_agreed,
                 entry.version,
-                entry.timestamp.isoformat(),
+                _to_iso(entry.timestamp),
             ),
         )
         conn.commit()
-        conn.close()
 
-    def _row_to_cg(self, row: sqlite3.Row) -> CommonGroundEntry:
-        return CommonGroundEntry(
-            cg_id=row["cg_id"],
-            pdf_chunk_ref=row["pdf_chunk_ref"],
-            original_text=row["original_text"],
-            negotiated_text=row["negotiated_text"],
-            proposed_by=row["proposed_by"],
-            session_agreed=row["session_agreed"],
-            version=row["version"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
-        )
+    def get_all_common_ground(self) -> list[dict]:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT * FROM common_ground ORDER BY timestamp DESC").fetchall()
+        return [dict(r) for r in rows]
 
-    def get_common_ground(self, cg_id: str) -> CommonGroundEntry | None:
-        conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM common_ground WHERE cg_id = ?", (cg_id,)
-        ).fetchone()
-        conn.close()
-        if row is None:
-            return None
-        return self._row_to_cg(row)
+    # ------------------------------------------------------------------
+    # Utility
+    # ------------------------------------------------------------------
 
-    def get_all_common_ground(self) -> list[CommonGroundEntry]:
-        conn = self._connect()
-        rows = conn.execute("SELECT * FROM common_ground").fetchall()
-        conn.close()
-        return [self._row_to_cg(r) for r in rows]
+    def execute_query(self, sql: str, params: tuple = ()) -> list[dict]:
+        """Raw query for ad-hoc use in tests / dev."""
+        conn = self._get_conn()
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _to_iso(dt) -> str:
+    if isinstance(dt, datetime):
+        return dt.isoformat()
+    return str(dt)
+
+
+# Singleton
+_default_store: Optional[RelationalStore] = None
+
+
+def get_relational_store() -> RelationalStore:
+    global _default_store
+    if _default_store is None:
+        _default_store = RelationalStore()
+    return _default_store

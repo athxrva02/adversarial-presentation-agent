@@ -37,12 +37,15 @@ def run(state: SessionState) -> Dict[str, Any]:
         memory_bundle=memory_bundle,
     )
 
-    raw = call_llm_structured(
-        system_prompt=prompt["system"],
-        user_prompt=prompt["user"],
-        schema_hint=SUMMARISATION_SCHEMA_HINT,
-        options=opts_summarise_or_score(),
-    )
+    try:
+        raw = call_llm_structured(
+            system_prompt=prompt["system"],
+            user_prompt=prompt["user"],
+            schema_hint=SUMMARISATION_SCHEMA_HINT,
+            options=opts_summarise_or_score(),
+        )
+    except Exception:
+        raw = {}  # fall through to defaults below — better than crashing
 
     # Defensive parsing with defaults
     strengths = list(raw.get("strengths") or []) if isinstance(raw, dict) else []

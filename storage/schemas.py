@@ -38,6 +38,7 @@ class DocumentChunk(BaseModel):
     text: str
     position_in_pdf: int
     embedding_id: Optional[str] = None
+    source_file: Optional[str] = None  # basename of the source PDF, used for re-upload detection
 
 
 class ClaimRecord(BaseModel):
