@@ -56,7 +56,7 @@ class MemoryModule:
         claims = self._episodic.retrieve_claims(query, k) if "episodic" in stores else []
         sessions = (
             self._episodic.retrieve_sessions(query, k)
-            if "episodic_sessions" in stores
+            if "episodic" in stores
             else []
         )
         patterns = self._semantic.retrieve(query, k) if "semantic" in stores else []

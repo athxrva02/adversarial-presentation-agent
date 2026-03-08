@@ -87,7 +87,7 @@ def test_store_and_retrieve_claim(module):
 
 def test_store_and_retrieve_session(module):
     module.store_session(_session("s1"), [_claim("c0", "s1")])
-    bundle = module.retrieve("Clear thesis", stores=["episodic_sessions"])
+    bundle = module.retrieve("Clear thesis", stores=["episodic"])
     assert len(bundle.episodic_sessions) == 1
 
 

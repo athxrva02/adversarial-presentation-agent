@@ -56,18 +56,30 @@ def merge_and_rank(
     order = session_order or {}
 
     chunks = _dedup_by_id(document_chunks, "chunk_id")[:top_k]
-    sessions = _dedup_by_id(episodic_sessions, "session_id")[:top_k]
-    patterns = _dedup_by_id(semantic_patterns, "pattern_id")[:top_k]
-    cg = _dedup_by_id(common_ground, "cg_id")[:top_k]
 
     claims = _dedup_by_id(episodic_claims, "claim_id")
+    sessions = _dedup_by_id(episodic_sessions, "session_id")
+    patterns = _dedup_by_id(semantic_patterns, "pattern_id")
+    cg = _dedup_by_id(common_ground, "cg_id")
+
     if order:
-        claims = sorted(
-            claims,
-            key=lambda c: _recency_score(c, order),
+        claims = sorted(claims, key=lambda c: _recency_score(c, order), reverse=True)
+        sessions = sorted(sessions, key=lambda s: _recency_score(s, order), reverse=True)
+        patterns = sorted(
+            patterns,
+            key=lambda p: settings.recency_decay_factor ** order.get(p.last_updated, len(order)),
             reverse=True,
         )
+        cg = sorted(
+            cg,
+            key=lambda e: settings.recency_decay_factor ** order.get(e.session_agreed, len(order)),
+            reverse=True,
+        )
+
     claims = claims[:top_k]
+    sessions = sessions[:top_k]
+    patterns = patterns[:top_k]
+    cg = cg[:top_k]
 
     return MemoryBundle(
         document_context=chunks,

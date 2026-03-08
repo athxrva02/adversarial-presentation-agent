@@ -35,8 +35,12 @@ class EpisodicMemory:
         self._rel.upsert_session(session)
         for claim in claims:
             self.store_claim(claim)
+        score_str = f"{session.overall_score:.2f}" if session.overall_score is not None else "N/A"
         summary_text = (
             f"Session {session.session_id}. "
+            f"Score: {score_str}. "
+            f"Claims: {session.claims_count}. "
+            f"Contradictions: {session.contradictions_detected}. "
             f"Strengths: {', '.join(session.strengths)}. "
             f"Weaknesses: {', '.join(session.weaknesses)}."
         )
