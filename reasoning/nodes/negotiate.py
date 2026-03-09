@@ -44,6 +44,7 @@ def run(state: SessionState) -> Dict[str, Any]:
 
     memory_bundle = state.get("memory_bundle")
     existing_common_ground = list(getattr(memory_bundle, "common_ground", []) or [])
+    episodic_claims = list(getattr(memory_bundle, "episodic_claims", []) or [])
     existing_by_id: dict[str, Any] = {}
     for entry in existing_common_ground:
         cid = getattr(entry, "cg_id", None)
@@ -52,7 +53,7 @@ def run(state: SessionState) -> Dict[str, Any]:
 
     claims = list(state.get("claims", []) or [])
     claim_by_id: dict[str, Any] = {}
-    for c in claims:
+    for c in [*episodic_claims, *claims]:
         cid = getattr(c, "claim_id", None)
         if isinstance(cid, str) and cid:
             claim_by_id[cid] = c
@@ -64,10 +65,6 @@ def run(state: SessionState) -> Dict[str, Any]:
         contradiction_flag = True
     if any(str(getattr(c, "prior_conflict", "") or "").strip() for c in claims):
         contradiction_flag = True
-    try:
-        contradiction_flag = contradiction_flag or int(getattr(summary, "contradictions_detected", 0) or 0) > 0
-    except Exception:
-        pass
 
     if not contradiction_flag:
         return {"phase": "negotiation", "negotiation_items": []}
@@ -76,32 +73,31 @@ def run(state: SessionState) -> Dict[str, Any]:
     seen_pairs: set[tuple[str, str]] = set()
 
     if conflict is not None and getattr(conflict, "status", None) == ConflictStatus.TRUE_CONTRADICTION:
-        conflict_text = str(getattr(conflict, "explanation", "") or "").strip()
+        conflict_text = str(getattr(conflict, "explanation", "") or "Contradiction detected.").strip()
         current_claim = str(getattr(conflict, "current_claim", "") or "").strip()
         prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
-        if conflict_text and (current_claim or prior_claim):
-            key = (current_claim, prior_claim)
-            seen_pairs.add(key)
-            proposed = f"Resolve contradiction: {conflict_text}"
-            cg_id = _stable_cg_id(proposed)
-            prior_entry = existing_by_id.get(cg_id)
-            items.append(
-                _item(
-                    kind="common_ground",
-                    proposed_text=proposed,
-                    source="conflict_result",
-                    rationale="Persist contradiction resolution.",
-                    default_decision="clarify",
-                    cg_id=cg_id,
-                    version=int(getattr(prior_entry, "version", 0) or 0),
-                    proposed_by="agent",
-                    pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
-                    original_text=getattr(prior_entry, "negotiated_text", None),
-                    conflict_explanation=conflict_text,
-                    current_claim=current_claim,
-                    past_claim=prior_claim,
-                )
+        key = (current_claim, prior_claim)
+        seen_pairs.add(key)
+        proposed = f"Resolve contradiction: {conflict_text}"
+        cg_id = _stable_cg_id(proposed)
+        prior_entry = existing_by_id.get(cg_id)
+        items.append(
+            _item(
+                kind="common_ground",
+                proposed_text=proposed,
+                source="conflict_result",
+                rationale="Persist contradiction resolution.",
+                default_decision="clarify",
+                cg_id=cg_id,
+                version=int(getattr(prior_entry, "version", 0) or 0),
+                proposed_by="agent",
+                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
+                original_text=getattr(prior_entry, "negotiated_text", None),
+                conflict_explanation=conflict_text,
+                current_claim=current_claim,
+                past_claim=prior_claim,
             )
+        )
 
     for c in claims:
         prior_id = str(getattr(c, "prior_conflict", "") or "").strip()
@@ -133,29 +129,6 @@ def run(state: SessionState) -> Dict[str, Any]:
                 conflict_explanation=explanation,
                 current_claim=current_claim,
                 past_claim=prior_claim,
-            )
-        )
-
-    if not items:
-        # Contradictions were counted but details are unavailable. Ask for one explicit resolution note.
-        proposed = "Resolve contradictions identified in this session."
-        cg_id = _stable_cg_id(proposed)
-        prior_entry = existing_by_id.get(cg_id)
-        items.append(
-            _item(
-                kind="common_ground",
-                proposed_text=proposed,
-                source="conflict_summary",
-                rationale="Persist a contradiction-resolution note when details are missing.",
-                default_decision="clarify",
-                cg_id=cg_id,
-                version=int(getattr(prior_entry, "version", 0) or 0),
-                proposed_by="agent",
-                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
-                original_text=getattr(prior_entry, "negotiated_text", None),
-                conflict_explanation="Contradiction(s) detected in session summary.",
-                current_claim="",
-                past_claim="",
             )
         )
 
