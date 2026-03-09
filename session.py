@@ -334,7 +334,7 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
 
     items = runner.state.get("negotiation_items") or []
     if not items:
-        _info("No negotiation items.")
+        _info("No contradictions detected. Skipping negotiation.")
         return
 
     contradiction_items = [
@@ -367,6 +367,66 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         "clarify": "Needs your clarification",
     }
 
+    def _parse_decision(raw: str) -> str | None:
+        s = str(raw or "").strip().lower()
+        if not s:
+            return None
+        if s in {"a", "accept"}:
+            return "accept"
+        if s in {"r", "reject"}:
+            return "reject"
+        if s in {"u", "update"}:
+            return "update"
+        if s in {"c", "clarify"}:
+            return "clarify"
+
+        tokens = set(s.replace(",", " ").replace(".", " ").split())
+        if {"accept", "agree", "yes", "keep"} & tokens:
+            return "accept"
+        if {"reject", "no", "skip", "discard"} & tokens:
+            return "reject"
+        if {"update", "edit", "change", "modify"} & tokens:
+            return "update"
+        if {"clarify", "clarification", "explain"} & tokens:
+            return "clarify"
+        return None
+
+    def _capture_decision(default_decision: str) -> str:
+        if voice:
+            spoken = _record_speech(
+                "Press Enter to START, then say: accept, reject, update, or clarify. Press Enter to STOP.",
+                label="negotiation",
+            )
+            if spoken == "/end":
+                return "reject"
+            parsed = _parse_decision(spoken or "")
+            if parsed is not None:
+                return parsed
+            _warn("Could not parse voice decision; please type it.")
+
+        typed = input("      decision (Enter=default): ").strip().lower()
+        if not typed:
+            return ""
+        parsed = _parse_decision(typed)
+        if parsed is not None:
+            return parsed
+        _warn("Invalid input; using default.")
+        return default_decision
+
+    def _capture_text(*, field_name: str, typed_prompt: str) -> str:
+        if voice:
+            spoken = _record_speech(
+                f"Press Enter to START, then speak your {field_name}. Press Enter to STOP.",
+                label="negotiation",
+            )
+            if spoken == "/end":
+                return ""
+            spoken_clean = str(spoken or "").strip()
+            if spoken_clean:
+                return spoken_clean
+            _warn("Voice input not captured; please type it.")
+        return input(typed_prompt).strip()
+
     print("  Review each suggestion and choose: [a] Accept, [r] Reject, [u] Update text, [c] Clarify")
     for idx, item in enumerate(review_items, start=1):
         print()
@@ -390,11 +450,14 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         default_decision = str(item.get("default_decision", "clarify")).lower()
         print(f"      Suggested action      : {action_label.get(default_decision, default_decision)}")
 
-        cmd = input("      decision (Enter=default): ").strip().lower()
+        cmd = _capture_decision(default_decision)
 
         if not cmd:
             if default_decision == "clarify":
-                clarified = input("      clarified text (empty = reject): ").strip()
+                clarified = _capture_text(
+                    field_name="clarified text",
+                    typed_prompt="      clarified text (empty = reject): ",
+                )
                 if clarified:
                     decisions.append({
                         "item_id": item["item_id"],
@@ -414,7 +477,10 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         elif cmd in {"r", "reject"}:
             decision = "reject"
         elif cmd in {"c", "clarify"}:
-            clarified = input("      clarified text (empty = reject): ").strip()
+            clarified = _capture_text(
+                field_name="clarified text",
+                typed_prompt="      clarified text (empty = reject): ",
+            )
             if clarified:
                 decisions.append({
                     "item_id": item["item_id"],
@@ -429,7 +495,10 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
                 })
             continue
         elif cmd in {"u", "update"}:
-            updated_text = input("      updated text: ").strip()
+            updated_text = _capture_text(
+                field_name="updated text",
+                typed_prompt="      updated text: ",
+            )
             if not updated_text:
                 _warn("Empty update; saving as reject.")
                 decisions.append({
@@ -444,9 +513,6 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
                 "proposed_by": "user",
             })
             continue
-        else:
-            _warn("Invalid input; using default.")
-            decision = default_decision
 
         decisions.append({
             "item_id": item["item_id"],
