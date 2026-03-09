@@ -96,3 +96,61 @@ def test_session_negotiation_reports_contradiction_items(monkeypatch, capsys):
     assert runner.committed[0]["decision"] == "accept"
     assert "contradiction item(s) to review" in out
     assert "Contradiction detected: Claim mismatch." in out
+
+
+def test_session_negotiation_voice_accept(monkeypatch, capsys):
+    runner = _RunnerStub(
+        [
+            {
+                "item_id": "i1",
+                "kind": "common_ground",
+                "source": "conflict_result",
+                "proposed_text": "Resolve contradiction: claim mismatch.",
+                "conflict_explanation": "Claim mismatch.",
+                "current_claim": "Model accuracy improved.",
+                "past_claim": "Model accuracy decreased.",
+                "default_decision": "clarify",
+            }
+        ]
+    )
+
+    answers = iter(["accept"])
+    monkeypatch.setattr(session, "_record_speech", lambda *args, **kwargs: next(answers))
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": (_ for _ in ()).throw(AssertionError("input() should not be called")))
+
+    session._run_negotiation_phase(runner, voice=True)
+    out = capsys.readouterr().out
+
+    assert runner.committed is not None
+    assert len(runner.committed) == 1
+    assert runner.committed[0]["decision"] == "accept"
+    assert "Contradiction detected: Claim mismatch." in out
+
+
+def test_session_negotiation_voice_clarify_to_update(monkeypatch):
+    runner = _RunnerStub(
+        [
+            {
+                "item_id": "i1",
+                "kind": "common_ground",
+                "source": "conflict_result",
+                "proposed_text": "Resolve contradiction: claim mismatch.",
+                "conflict_explanation": "Claim mismatch.",
+                "current_claim": "Model accuracy improved.",
+                "past_claim": "Model accuracy decreased.",
+                "default_decision": "clarify",
+            }
+        ]
+    )
+
+    answers = iter(["clarify", "The earlier claim referred to a different dataset."])
+    monkeypatch.setattr(session, "_record_speech", lambda *args, **kwargs: next(answers))
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": (_ for _ in ()).throw(AssertionError("input() should not be called")))
+
+    session._run_negotiation_phase(runner, voice=True)
+
+    assert runner.committed is not None
+    assert len(runner.committed) == 1
+    d = runner.committed[0]
+    assert d["decision"] == "update"
+    assert "different dataset" in d["updated_text"]

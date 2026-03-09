@@ -56,12 +56,13 @@ def _conflict() -> ConflictResult:
 
 
 def test_negotiate_node_generates_versioned_common_ground_items():
-    next_step = "State baseline before reporting improvements."
+    conflict_text = "A conflicts with B."
+    proposed = f"Resolve contradiction: {conflict_text}"
     existing = CommonGroundEntry(
-        cg_id=_stable_cg_id(next_step),
+        cg_id=_stable_cg_id(proposed),
         pdf_chunk_ref=None,
         original_text="old",
-        negotiated_text="State baseline first.",
+        negotiated_text="Previous contradiction resolution.",
         proposed_by="agent",
         session_agreed="s0",
         version=4,
@@ -73,27 +74,52 @@ def test_negotiate_node_generates_versioned_common_ground_items():
 
     state = {
         "session_summary": _summary(),
-        "score_breakdown": {
-            "notes": {"most_important_next_step": next_step},
-            "open_issues": ["Define train/val/test split explicitly."],
-        },
+        "score_breakdown": {},
         "memory_bundle": _Bundle(),
         "conflict_result": _conflict(),
+        "claims": [],
     }
 
     out = negotiate_run(state)
     items = out["negotiation_items"]
 
-    assert any(i["kind"] == "semantic_strength" for i in items)
-    assert any(i["kind"] == "semantic_weakness" for i in items)
+    assert len(items) == 1
+    item = items[0]
+    assert item["kind"] == "common_ground"
+    assert item["source"] == "conflict_result"
+    assert item["cg_id"] == _stable_cg_id(proposed)
+    assert item["version"] == 4
+    assert item["original_text"] == "Previous contradiction resolution."
+    assert item["current_claim"] == "A"
+    assert item["past_claim"] == "B"
 
-    next_step_item = next(i for i in items if i.get("source") == "score_breakdown.notes.most_important_next_step")
-    assert next_step_item["kind"] == "common_ground"
-    assert next_step_item["cg_id"] == _stable_cg_id(next_step)
-    assert next_step_item["version"] == 4
-    assert next_step_item["original_text"] == "State baseline first."
 
-    assert any(i.get("source") == "conflict_result" for i in items)
+def test_negotiate_node_returns_empty_when_no_contradiction():
+    class _Bundle:
+        common_ground = []
+
+    state = {
+        "session_summary": SessionRecord(
+            session_id="s2",
+            timestamp=datetime(2026, 1, 1),
+            duration_seconds=120.0,
+            overall_score=70.0,
+            strengths=["Clear structure"],
+            weaknesses=["Needs examples"],
+            claims_count=3,
+            contradictions_detected=0,
+        ),
+        "score_breakdown": {
+            "notes": {"most_important_next_step": "Add examples."},
+            "open_issues": ["Clarify metric."],
+        },
+        "memory_bundle": _Bundle(),
+        "conflict_result": None,
+        "claims": [],
+    }
+
+    out = negotiate_run(state)
+    assert out["negotiation_items"] == []
 
 
 def test_commit_negotiation_persists_common_ground_and_semantic_items():

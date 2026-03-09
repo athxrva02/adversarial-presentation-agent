@@ -8,20 +8,6 @@ from reasoning.state import SessionState
 from storage.schemas import ConflictStatus
 
 
-def _uniq_nonempty(values: list[Any], max_items: int) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for v in values:
-        s = str(v or "").strip()
-        if not s or s in seen:
-            continue
-        seen.add(s)
-        out.append(s)
-        if len(out) >= max_items:
-            break
-    return out
-
-
 def _norm(text: str) -> str:
     return " ".join(text.lower().split())
 
@@ -56,14 +42,6 @@ def run(state: SessionState) -> Dict[str, Any]:
     if summary is None:
         return {"phase": "negotiation", "negotiation_items": []}
 
-    breakdown = state.get("score_breakdown") or {}
-    notes = breakdown.get("notes", {}) if isinstance(breakdown, dict) else {}
-    open_issues = breakdown.get("open_issues", []) if isinstance(breakdown, dict) else []
-
-    strengths = _uniq_nonempty(list(getattr(summary, "strengths", []) or []), 3)
-    weaknesses = _uniq_nonempty(list(getattr(summary, "weaknesses", []) or []), 5)
-    next_step = str(notes.get("most_important_next_step", "")).strip() if isinstance(notes, dict) else ""
-    open_issues = _uniq_nonempty(list(open_issues or []), 5)
     memory_bundle = state.get("memory_bundle")
     existing_common_ground = list(getattr(memory_bundle, "common_ground", []) or [])
     existing_by_id: dict[str, Any] = {}
@@ -72,73 +50,39 @@ def run(state: SessionState) -> Dict[str, Any]:
         if isinstance(cid, str) and cid:
             existing_by_id[cid] = entry
 
-    items: list[dict[str, Any]] = []
+    claims = list(state.get("claims", []) or [])
+    claim_by_id: dict[str, Any] = {}
+    for c in claims:
+        cid = getattr(c, "claim_id", None)
+        if isinstance(cid, str) and cid:
+            claim_by_id[cid] = c
 
-    for s in strengths:
-        items.append(
-            _item(
-                kind="semantic_strength",
-                proposed_text=s,
-                source="session_summary.strengths",
-                rationale="Promote recurring strength signal.",
-                default_decision="accept",
-            )
-        )
-
-    for w in weaknesses:
-        items.append(
-            _item(
-                kind="semantic_weakness",
-                proposed_text=w,
-                source="session_summary.weaknesses",
-                rationale="Track recurring weakness across sessions.",
-                default_decision="accept",
-            )
-        )
-
-    if next_step:
-        cg_id = _stable_cg_id(next_step)
-        prior_entry = existing_by_id.get(cg_id)
-        items.append(
-            _item(
-                kind="common_ground",
-                proposed_text=next_step,
-                source="score_breakdown.notes.most_important_next_step",
-                rationale="Carry agreed coaching priority into next session.",
-                default_decision="clarify",
-                cg_id=cg_id,
-                version=int(getattr(prior_entry, "version", 0) or 0),
-                proposed_by="agent",
-                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
-                original_text=getattr(prior_entry, "negotiated_text", None),
-            )
-        )
-
-    for issue in open_issues:
-        cg_id = _stable_cg_id(issue)
-        prior_entry = existing_by_id.get(cg_id)
-        items.append(
-            _item(
-                kind="common_ground",
-                proposed_text=issue,
-                source="score_breakdown.open_issues",
-                rationale="Persist unresolved issue as negotiable common ground.",
-                default_decision="clarify",
-                cg_id=cg_id,
-                version=int(getattr(prior_entry, "version", 0) or 0),
-                proposed_by="agent",
-                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
-                original_text=getattr(prior_entry, "negotiated_text", None),
-            )
-        )
-
+    # Hard gate: negotiation is only for contradiction resolution.
+    contradiction_flag = False
     conflict = state.get("conflict_result")
     if conflict is not None and getattr(conflict, "status", None) == ConflictStatus.TRUE_CONTRADICTION:
+        contradiction_flag = True
+    if any(str(getattr(c, "prior_conflict", "") or "").strip() for c in claims):
+        contradiction_flag = True
+    try:
+        contradiction_flag = contradiction_flag or int(getattr(summary, "contradictions_detected", 0) or 0) > 0
+    except Exception:
+        pass
+
+    if not contradiction_flag:
+        return {"phase": "negotiation", "negotiation_items": []}
+
+    items: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+
+    if conflict is not None and getattr(conflict, "status", None) == ConflictStatus.TRUE_CONTRADICTION:
         conflict_text = str(getattr(conflict, "explanation", "") or "").strip()
-        if conflict_text:
+        current_claim = str(getattr(conflict, "current_claim", "") or "").strip()
+        prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
+        if conflict_text and (current_claim or prior_claim):
+            key = (current_claim, prior_claim)
+            seen_pairs.add(key)
             proposed = f"Resolve contradiction: {conflict_text}"
-            current_claim = str(getattr(conflict, "current_claim", "") or "").strip()
-            prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
             cg_id = _stable_cg_id(proposed)
             prior_entry = existing_by_id.get(cg_id)
             items.append(
@@ -159,7 +103,60 @@ def run(state: SessionState) -> Dict[str, Any]:
                 )
             )
 
-    return {
-        "phase": "negotiation",
-        "negotiation_items": items,
-    }
+    for c in claims:
+        prior_id = str(getattr(c, "prior_conflict", "") or "").strip()
+        if not prior_id:
+            continue
+        current_claim = str(getattr(c, "claim_text", "") or "").strip()
+        prior_claim_obj = claim_by_id.get(prior_id)
+        prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
+        key = (current_claim, prior_claim)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        explanation = "Current claim conflicts with a past claim."
+        proposed = f"Resolve contradiction between claims: {prior_id} and {getattr(c, 'claim_id', 'current')}"
+        cg_id = _stable_cg_id(proposed)
+        prior_entry = existing_by_id.get(cg_id)
+        items.append(
+            _item(
+                kind="common_ground",
+                proposed_text=proposed,
+                source="conflict_history",
+                rationale="Persist contradiction resolution from session history.",
+                default_decision="clarify",
+                cg_id=cg_id,
+                version=int(getattr(prior_entry, "version", 0) or 0),
+                proposed_by="agent",
+                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
+                original_text=getattr(prior_entry, "negotiated_text", None),
+                conflict_explanation=explanation,
+                current_claim=current_claim,
+                past_claim=prior_claim,
+            )
+        )
+
+    if not items:
+        # Contradictions were counted but details are unavailable. Ask for one explicit resolution note.
+        proposed = "Resolve contradictions identified in this session."
+        cg_id = _stable_cg_id(proposed)
+        prior_entry = existing_by_id.get(cg_id)
+        items.append(
+            _item(
+                kind="common_ground",
+                proposed_text=proposed,
+                source="conflict_summary",
+                rationale="Persist a contradiction-resolution note when details are missing.",
+                default_decision="clarify",
+                cg_id=cg_id,
+                version=int(getattr(prior_entry, "version", 0) or 0),
+                proposed_by="agent",
+                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
+                original_text=getattr(prior_entry, "negotiated_text", None),
+                conflict_explanation="Contradiction(s) detected in session summary.",
+                current_claim="",
+                past_claim="",
+            )
+        )
+
+    return {"phase": "negotiation", "negotiation_items": items}
