@@ -61,6 +61,7 @@ class SessionState(TypedDict, total=False):
     negotiation_items: Optional[list[dict[str, Any]]]
     negotiation_decisions: Optional[list[dict[str, Any]]]
 
+
     # Control flags
     session_active: bool
 

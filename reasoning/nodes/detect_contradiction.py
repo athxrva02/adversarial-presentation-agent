@@ -12,6 +12,7 @@ from storage.schemas import ConflictAction, ConflictResult, ConflictStatus
 import logging
 logger = logging.getLogger(__name__)
 
+
 def _default_conflict(current_claim: str, explanation: str) -> ConflictResult:
     return ConflictResult(
         status=ConflictStatus.NO_CONFLICT,
@@ -41,7 +42,14 @@ def _norm_action(v: Any, status: str) -> str:
 def run(state: SessionState) -> Dict[str, Any]:
     current_claim = str(state.get("user_input", "")).strip()
     memory_bundle = state.get("memory_bundle")
+    #Fix: Design Issue 3: Unranked, undocumented claim truncation
     candidate_claims = list(getattr(memory_bundle, "episodic_claims", []) or [])
+    candidate_claims = sorted(
+        candidate_claims,
+        key=lambda c: getattr(c, "turn_number", 0),
+        reverse=True,
+    )[:8]
+    # End Fix Design Issue 3
     common_ground = list(getattr(memory_bundle, "common_ground", []) or [])
     classification = state.get("classification")
 
@@ -65,6 +73,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         candidate_claims=candidate_claims,
         classification=classification,
         common_ground=common_ground,
+        max_candidates=len(candidate_claims), #Fix: Design Issue 3: Unranked, undocumented claim truncation
     )
 
     try:

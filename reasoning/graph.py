@@ -29,6 +29,8 @@ from reasoning.nodes.detect_contradiction import run as detect_contradiction_run
 from reasoning.nodes.negotiate import run as negotiate_run
 from storage.schemas import CommonGroundEntry, SemanticPattern, SessionRecord
 from reasoning.nodes.mediate_contradiction import run as mediate_contradiction_run
+import logging
+logger = logging.getLogger(__name__)
 
 
 def build_practice_graph():
@@ -196,65 +198,79 @@ class SessionRunner:
 
         session_id = self.state.get("session_id", "unknown_session")
 
+        #Fix:Design Issue 4:Partial writes with no error signal
+        failed: list[tuple[str, str]] = []
         for d in decisions:
             item = items.get(d.get("item_id"))
-            if item is None:
-                continue
-
-            decision = str(d.get("decision", "reject")).lower()
-            if decision not in {"accept", "update"}:
-                continue
-
-            kind = str(item.get("kind", "")).lower()
-
-            if kind in {"semantic_strength", "semantic_weakness"}:
-                pattern_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
-                if not pattern_text:
+            try:
+                if item is None:
                     continue
-                category = "strength" if kind == "semantic_strength" else "weakness"
-                try:
-                    confidence = float(item.get("confidence", 0.8))
-                except Exception:
-                    confidence = 0.8
-                evidence = item.get("evidence") or []
-                if not isinstance(evidence, list):
-                    evidence = []
-                pattern = SemanticPattern(
-                    pattern_id=str(item.get("pattern_id") or f"sp_{category}_{uuid4().hex[:10]}"),
-                    category=category,
-                    text=pattern_text,
-                    confidence=confidence,
-                    direction=str(item.get("direction") or "stable"),
-                    first_seen=str(item.get("first_seen") or session_id),
-                    last_updated=session_id,
-                    session_count=int(item.get("session_count", 1)),
-                    status=str(item.get("status") or "active"),
-                    evidence=evidence,
+
+                decision = str(d.get("decision", "reject")).lower()
+                if decision not in {"accept", "update"}:
+                    continue
+
+                kind = str(item.get("kind", "")).lower()
+
+                if kind in {"semantic_strength", "semantic_weakness"}:
+                    pattern_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
+                    if not pattern_text:
+                        continue
+                    category = "strength" if kind == "semantic_strength" else "weakness"
+                    try:
+                        confidence = float(item.get("confidence", 0.8))
+                    except Exception:
+                        confidence = 0.8
+                    evidence = item.get("evidence") or []
+                    if not isinstance(evidence, list):
+                        evidence = []
+                    pattern = SemanticPattern(
+                        pattern_id=str(item.get("pattern_id") or f"sp_{category}_{uuid4().hex[:10]}"),
+                        category=category,
+                        text=pattern_text,
+                        confidence=confidence,
+                        direction=str(item.get("direction") or "stable"),
+                        first_seen=str(item.get("first_seen") or session_id),
+                        last_updated=session_id,
+                        session_count=int(item.get("session_count", 1)),
+                        status=str(item.get("status") or "active"),
+                        evidence=evidence,
+                    )
+                    self._memory.store_semantic_pattern(pattern)
+                    continue
+
+                if kind != "common_ground":
+                    continue
+
+                negotiated_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
+                if not negotiated_text:
+                    continue
+
+                base_version = int(item.get("version", 0) or 0)
+                entry_version = max(1, base_version + (1 if decision == "update" else 0))
+
+                entry = CommonGroundEntry(
+                    cg_id=str(item.get("cg_id") or f"cg_{uuid4().hex[:12]}"),
+                    pdf_chunk_ref=item.get("pdf_chunk_ref"),
+                    original_text=item.get("original_text"),
+                    negotiated_text=negotiated_text,
+                    proposed_by=str(d.get("proposed_by") or item.get("proposed_by") or "agent"),
+                    session_agreed=session_id,
+                    version=entry_version,
+                    timestamp=datetime.now(),
                 )
-                self._memory.store_semantic_pattern(pattern)
-                continue
-
-            if kind != "common_ground":
-                continue
-
-            negotiated_text = str(d.get("updated_text") or item.get("proposed_text") or "").strip()
-            if not negotiated_text:
-                continue
-
-            base_version = int(item.get("version", 0) or 0)
-            entry_version = max(1, base_version + (1 if decision == "update" else 0))
-
-            entry = CommonGroundEntry(
-                cg_id=str(item.get("cg_id") or f"cg_{uuid4().hex[:12]}"),
-                pdf_chunk_ref=item.get("pdf_chunk_ref"),
-                original_text=item.get("original_text"),
-                negotiated_text=negotiated_text,
-                proposed_by=str(d.get("proposed_by") or item.get("proposed_by") or "agent"),
-                session_agreed=session_id,
-                version=entry_version,
-                timestamp=datetime.now(),
-            )
-            self._memory.store_common_ground(entry)
+                self._memory.store_common_ground(entry)
+            except Exception as exc:
+                logger.exception(
+                    "Negotiation commit failed for item_id=%s decision=%s",
+                    item,
+                    d.get("decision"),
+                )
+                failed.append((item or "<missing_item_id>", str(exc)))
+        if failed:
+            failed_ids = [fid for fid, _ in failed]
+            raise RuntimeError(f"Negotiation commit partial failure: {failed_ids}")
+        # End Fix Design Issue 4:Partial writes with no error signal
 
     def end_session(self) -> Any:
         """

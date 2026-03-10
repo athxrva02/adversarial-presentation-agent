@@ -51,12 +51,27 @@ def run(state: SessionState) -> Dict[str, Any]:
         if isinstance(cid, str) and cid:
             existing_by_id[cid] = entry
 
+    # Fix: Design Issue 2: claim_by_id silently overwrites episodic claims
+    # claims = list(state.get("claims", []) or [])
+    # claim_by_id: dict[str, Any] = {}
+    # for c in [*episodic_claims, *claims]:
+    #     cid = getattr(c, "claim_id", None)
+    #     if isinstance(cid, str) and cid:
+    #         claim_by_id[cid] = c
     claims = list(state.get("claims", []) or [])
-    claim_by_id: dict[str, Any] = {}
-    for c in [*episodic_claims, *claims]:
+
+    episodic_by_id: dict[str, Any] = {}
+    for c in episodic_claims:
         cid = getattr(c, "claim_id", None)
         if isinstance(cid, str) and cid:
-            claim_by_id[cid] = c
+            episodic_by_id[cid] = c
+
+    session_by_id: dict[str, Any] = {}
+    for c in claims:
+        cid = getattr(c, "claim_id", None)
+        if isinstance(cid, str) and cid:
+            session_by_id[cid] = c
+    # End Fix Design Issue 2
 
     # Hard gate: negotiation is only for contradiction resolution.
     contradiction_flag = False
@@ -112,8 +127,12 @@ def run(state: SessionState) -> Dict[str, Any]:
         if not prior_id:
             continue
         current_claim = str(getattr(c, "claim_text", "") or "").strip()
-        prior_claim_obj = claim_by_id.get(prior_id)
+         # Fix: Design Issue 2: claim_by_id silently overwrites episodic claims
+        # prior_claim_obj = claim_by_id.get(prior_id)
+        # prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
+        prior_claim_obj = episodic_by_id.get(prior_id) or session_by_id.get(prior_id)
         prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
+        # End Fix Design Issue 2
         key = (current_claim, prior_claim)
         if key in seen_pairs:
             continue

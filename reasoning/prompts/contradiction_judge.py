@@ -27,12 +27,12 @@ def build_contradiction_judge_prompt(
     candidate_claims: list[Any],
     classification: Optional[Any] = None,
     common_ground: Optional[list[Any]] = None,
-    max_candidates: int = 8,
+    max_candidates: int | None = None, # Fix: Design Issue 3: Unranked, undocumented claim truncation 
 ) -> dict[str, str]:
     system = json_only_system(CONTRADICTION_SCHEMA_HINT)
 
-    claims_block = render_claims(candidate_claims, max_items=max_candidates)
-    cg_block = render_common_ground(common_ground, max_items=6)
+    claims_block = render_claims(candidate_claims,max_items=max_candidates) # Fix: Design Issue 3: Unranked, undocumented claim truncation 
+    cg_block = render_common_ground(common_ground)
 
     cls_block = ""
     if classification is not None:
