@@ -65,7 +65,12 @@ def run(state: SessionState) -> Dict[str, Any]:
         contradiction_flag = True
     if any(str(getattr(c, "prior_conflict", "") or "").strip() for c in claims):
         contradiction_flag = True
-
+    #Fix:Bug4 Lost fallback for untracked contradictions
+    try:
+        contradiction_flag = contradiction_flag or int(getattr(summary, "contradictions_detected", 0) or 0) > 0
+    except Exception:
+        pass
+    #End Fix Bug 4
     if not contradiction_flag:
         return {"phase": "negotiation", "negotiation_items": []}
 
@@ -76,28 +81,31 @@ def run(state: SessionState) -> Dict[str, Any]:
         conflict_text = str(getattr(conflict, "explanation", "") or "Contradiction detected.").strip()
         current_claim = str(getattr(conflict, "current_claim", "") or "").strip()
         prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
-        key = (current_claim, prior_claim)
-        seen_pairs.add(key)
-        proposed = f"Resolve contradiction: {conflict_text}"
-        cg_id = _stable_cg_id(proposed)
-        prior_entry = existing_by_id.get(cg_id)
-        items.append(
-            _item(
-                kind="common_ground",
-                proposed_text=proposed,
-                source="conflict_result",
-                rationale="Persist contradiction resolution.",
-                default_decision="clarify",
-                cg_id=cg_id,
-                version=int(getattr(prior_entry, "version", 0) or 0),
-                proposed_by="agent",
-                pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
-                original_text=getattr(prior_entry, "negotiated_text", None),
-                conflict_explanation=conflict_text,
-                current_claim=current_claim,
-                past_claim=prior_claim,
+        #Fix:Bug2: Empty-string dedup key collision
+        if conflict_text and (current_claim or prior_claim):
+            key = (current_claim, prior_claim)
+            seen_pairs.add(key)
+            proposed = f"Resolve contradiction: {conflict_text}"
+            cg_id = _stable_cg_id(proposed)
+            prior_entry = existing_by_id.get(cg_id)
+            items.append(
+                _item(
+                    kind="common_ground",
+                    proposed_text=proposed,
+                    source="conflict_result",
+                    rationale="Persist contradiction resolution.",
+                    default_decision="clarify",
+                    cg_id=cg_id,
+                    version=int(getattr(prior_entry, "version", 0) or 0),
+                    proposed_by="agent",
+                    pdf_chunk_ref=getattr(prior_entry, "pdf_chunk_ref", None),
+                    original_text=getattr(prior_entry, "negotiated_text", None),
+                    conflict_explanation=conflict_text,
+                    current_claim=current_claim,
+                    past_claim=prior_claim,
+                )
             )
-        )
+        #End Fix Bug 2
 
     for c in claims:
         prior_id = str(getattr(c, "prior_conflict", "") or "").strip()

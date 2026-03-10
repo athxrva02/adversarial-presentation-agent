@@ -9,7 +9,8 @@ from reasoning.prompts.contradiction_judge import (
 )
 from reasoning.state import SessionState
 from storage.schemas import ConflictAction, ConflictResult, ConflictStatus
-
+import logging
+logger = logging.getLogger(__name__)
 
 def _default_conflict(current_claim: str, explanation: str) -> ConflictResult:
     return ConflictResult(
@@ -74,6 +75,8 @@ def run(state: SessionState) -> Dict[str, Any]:
             options=opts_judge_or_classify(),
         )
     except Exception:
+        #Fix:Bug3:Silent exception swallowing
+        logger.warning("Contradiction check failed; defaulting to no_conflict.", exc_info=True)
         return {
             "conflict_result": _default_conflict(
                 current_claim,

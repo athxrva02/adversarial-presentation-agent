@@ -361,6 +361,19 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         return None
 
     def _capture_decision(default_decision: str) -> str:
+        # Fixed bug 1:Voice mode silently dropped
+        if voice:
+            spoken = _record_speech(
+                "Press Enter to START, then say: accept, reject, or clarify. Press Enter to STOP.",
+                label="negotiation",
+            )
+            if spoken == "/end":
+                return "reject"
+            parsed = _parse_decision(spoken or "")
+            if parsed is not None:
+                return parsed
+            _warn("Could not parse voice decision; please type it.")
+        #end of bug 1
         typed = input("      decision [a/r/c] (Enter=default): ").strip().lower()
         if not typed:
             return ""
