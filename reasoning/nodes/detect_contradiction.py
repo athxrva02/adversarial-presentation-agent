@@ -54,12 +54,14 @@ def run(state: SessionState) -> Dict[str, Any]:
     classification = state.get("classification")
 
     if not current_claim:
+        logger.debug("detect_contradiction: empty user input, skipping")
         return {
             "conflict_result": _default_conflict("", "Empty user input."),
             "conflict_prior_claim_id": None,
         }
 
     if not candidate_claims:
+        logger.debug("detect_contradiction: no prior claims available (turn may be first)")
         return {
             "conflict_result": _default_conflict(
                 current_claim,
@@ -116,6 +118,11 @@ def run(state: SessionState) -> Dict[str, Any]:
         current_claim=current_claim,
         prior_claim=str(prior_claim).strip() if prior_claim else None,
         explanation=str(raw.get("explanation") or "No explanation provided.").strip(),
+    )
+
+    logger.info(
+        "detect_contradiction result: status=%s, action=%s, prior_claim_id=%s, explanation=%s",
+        result.status.value, result.action.value, prior_claim_id, result.explanation,
     )
 
     return {

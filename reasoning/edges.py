@@ -9,8 +9,12 @@ They are intentionally conservative and avoid dependence on any one module.
 
 from __future__ import annotations
 
+import logging
+
 from reasoning.state import SessionState
 from storage.schemas import ConflictStatus, ResponseClass
+
+logger = logging.getLogger(__name__)
 
 
 def route_after_phase(state: SessionState) -> str:
@@ -46,26 +50,36 @@ def route_after_classification(state: SessionState) -> str:
     Default => request_evidence.
     """
     conflict = state.get("conflict_result")
-    if conflict is not None and getattr(conflict, "status", None) == ConflictStatus.TRUE_CONTRADICTION:
+    classification = state.get("classification")
+    rc = getattr(classification, "response_class", None) if classification else None
+    conflict_status = getattr(conflict, "status", None) if conflict else None
+
+    if conflict is not None and conflict_status == ConflictStatus.TRUE_CONTRADICTION:
+        logger.info("Routing: escalate_contradiction (conflict_result=%s)", conflict_status)
         return "escalate_contradiction"
 
-    classification = state.get("classification")
     if classification is None:
+        logger.info("Routing: redirect (no classification)")
         return "redirect"
 
-    rc = getattr(classification, "response_class", None)
-
     if rc == ResponseClass.EVASION:
+        logger.info("Routing: redirect (evasion)")
         return "redirect"
 
     if rc == ResponseClass.WEAK:
+        logger.info("Routing: probe_weak")
         return "probe_weak"
 
     if rc == ResponseClass.CONTRADICTION:
+        logger.info(
+            "Routing: escalate_contradiction (classification=%s, conflict_status=%s)",
+            rc, conflict_status,
+        )
         return "escalate_contradiction"
 
     if rc == ResponseClass.STRONG:
-        # Even a "strong" answer can be pushed: ask for evidence/assumptions/boundary cases
+        logger.info("Routing: request_evidence")
         return "request_evidence"
 
+    logger.info("Routing: request_evidence (default, rc=%s)", rc)
     return "request_evidence"

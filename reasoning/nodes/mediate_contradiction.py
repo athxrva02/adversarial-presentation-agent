@@ -30,12 +30,15 @@
 # removing the “canned response” design issue.
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 
 from reasoning.llm import call_llm_text, opts_practice_question
 from reasoning.prompts._base import safe_user_input_block, text_system
 from reasoning.state import SessionState
 from storage.schemas import ConflictStatus
+
+logger = logging.getLogger(__name__)
 
 
 def _build_mediation_prompt(
@@ -97,12 +100,37 @@ def _fallback_question(prior: str, current: str) -> str:
 
 def run(state: SessionState) -> Dict[str, Any]:
     conflict = state.get("conflict_result")
-    if conflict is None or getattr(conflict, "status", None) != ConflictStatus.TRUE_CONTRADICTION:
+    conflict_status = getattr(conflict, "status", None) if conflict else None
+    has_true_contradiction = conflict_status == ConflictStatus.TRUE_CONTRADICTION
+
+    # Also check if we were routed here via classification (response_class=contradiction)
+    classification = state.get("classification")
+    classification_contradiction = (
+        getattr(classification, "response_class", None) is not None
+        and getattr(classification, "response_class", None).value == "contradiction"
+    ) if classification else False
+
+    if not has_true_contradiction and not classification_contradiction:
+        logger.debug("mediate_contradiction: no contradiction signal, returning empty")
         return {"agent_response": ""}
 
-    prior = str(getattr(conflict, "prior_claim", "") or "").strip()
-    current = str(getattr(conflict, "current_claim", "") or state.get("user_input", "")).strip()
-    explanation = str(getattr(conflict, "explanation", "") or "").strip()
+    if has_true_contradiction:
+        prior = str(getattr(conflict, "prior_claim", "") or "").strip()
+        current = str(getattr(conflict, "current_claim", "") or state.get("user_input", "")).strip()
+        explanation = str(getattr(conflict, "explanation", "") or "").strip()
+        logger.info(
+            "Contradiction detected (conflict_result): status=%s, prior=%r, current=%r, explanation=%r",
+            conflict_status, prior, current, explanation,
+        )
+    else:
+        # Routed via classification — no conflict_result detail, use user_input
+        prior = ""
+        current = str(state.get("user_input", "")).strip()
+        explanation = str(getattr(classification, "reasoning", "") or "").strip()
+        logger.info(
+            "Contradiction detected (classification): response_class=%s, current=%r, reasoning=%r",
+            getattr(classification, "response_class", None), current, explanation,
+        )
 
     prompt = _build_mediation_prompt(
         prior_claim=prior,
@@ -118,9 +146,12 @@ def run(state: SessionState) -> Dict[str, Any]:
         )
         question = _clean_question(raw)
     except Exception:
+        logger.warning("Mediation LLM call failed, using fallback", exc_info=True)
         question = ""
 
     if not question:
         question = _fallback_question(prior, current)
+        logger.info("Using fallback mediation question")
 
+    logger.info("Mediation response: %r", question)
     return {"agent_response": question}

@@ -14,13 +14,21 @@ from storage.schemas import (
 )
 
 
+def _get_field(item: Any, field: str) -> Any:
+    """Get a field from an object or dict."""
+    val = getattr(item, field, None)
+    if val is None and isinstance(item, dict):
+        val = item.get(field)
+    return val
+
+
 def _recency_score(item: Any, session_order: dict[str, int]) -> float:
     """Return a recency weight for *item* based on its session age.
 
     ``session_order`` maps ``session_id`` → age (0 = most recent).
     Score = ``recency_decay_factor ** age``.
     """
-    session_id = getattr(item, "session_id", None)
+    session_id = _get_field(item, "session_id")
     if session_id is None or session_id not in session_order:
         return 1.0
     age = session_order[session_id]
@@ -32,7 +40,7 @@ def _dedup_by_id(items: list, id_attr: str) -> list:
     seen: set[str] = set()
     result: list = []
     for item in items:
-        item_id = getattr(item, id_attr, None)
+        item_id = _get_field(item, id_attr)
         if item_id is not None and item_id not in seen:
             seen.add(item_id)
             result.append(item)
@@ -67,12 +75,16 @@ def merge_and_rank(
         sessions = sorted(sessions, key=lambda s: _recency_score(s, order), reverse=True)
         patterns = sorted(
             patterns,
-            key=lambda p: settings.recency_decay_factor ** order.get(p.last_updated, len(order)),
+            key=lambda p: settings.recency_decay_factor ** order.get(
+                _get_field(p, "last_updated") or "", len(order)
+            ),
             reverse=True,
         )
         cg = sorted(
             cg,
-            key=lambda e: settings.recency_decay_factor ** order.get(e.session_agreed, len(order)),
+            key=lambda e: settings.recency_decay_factor ** order.get(
+                _get_field(e, "session_agreed") or "", len(order)
+            ),
             reverse=True,
         )
 
