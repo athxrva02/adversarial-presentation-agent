@@ -20,7 +20,9 @@ import os
 import sys
 import tempfile
 import logging
+import threading
 from datetime import datetime
+from config import settings as _settings
 
 logger = logging.getLogger(__name__)
 
@@ -294,24 +296,94 @@ def run_session(
     _speak(first_question, voice)
 
     # ── Phase 4: Q&A loop ─────────────────────────────────────────────────────
-    print(DIM + f"  Commands: type /end before recording to finish the session." + RESET)
+    min_answers = _settings.min_questions   # user must answer at least this many (default 3)
+    max_answers = _settings.max_questions   # session ends after this many answers (default 5)
+
+    answered_count = 0  # number of completed answer→question exchanges
+
+    print(DIM + f"  Q&A: answer {min_answers}–{max_answers} questions. "
+          f"Commands: /end (after {min_answers} answers) " + RESET)
 
     while runner.state.get("session_active", True):
+        # ── Collect one answer ────────────────────────────────────────────────
         answer = None
         while answer is None:
-            result = _record_speech(
-                "Press Enter to START your answer, then Enter to STOP.",
-                label="answer",
-            )
+            if answered_count >= min_answers:
+                prompt_line = (
+                    f"Press Enter to START your answer, then Enter to STOP. "
+                    f"(answer {answered_count + 1}/{max_answers} — type /end to finish)"
+                )
+            else:
+                prompt_line = (
+                    f"Press Enter to START your answer, then Enter to STOP. "
+                    f"(answer {answered_count + 1}/{max_answers})"
+                )
+            result = _record_speech(prompt_line, label="answer")
+
             if result == "/end":
-                break
+                if answered_count >= min_answers:
+                    break
+                else:
+                    remaining = min_answers - answered_count
+                    _warn(
+                        f"Please answer at least {remaining} more question(s) before ending. "
+                        f"({answered_count}/{min_answers} answered so far)"
+                    )
+                    result = None
+                    continue
             answer = result
 
         if result == "/end":
             break
 
-        print(DIM + "  Thinking…" + RESET, flush=True)
-        question = runner.handle_user_input(answer)
+        # Hard stop: max answers received — exit without generating another question
+        answered_count += 1
+        if answered_count >= max_answers:
+            _info(f"Maximum of {max_answers} answers reached. Ending session.")
+            break
+
+        # ── Generate next question; /end typed here ends immediately ─────────
+        # A background thread watches stdin. If the user types /end while the
+        # LLM is running, _abort is set and we skip the question entirely.
+        _abort = threading.Event()
+
+        def _watch_for_abort(event: threading.Event) -> None:
+            try:
+                line = input()
+                if line.strip().lower() in {"/end", "end", "quit", "exit"}:
+                    event.set()
+            except EOFError:
+                pass
+
+        watcher = threading.Thread(target=_watch_for_abort, args=(_abort,), daemon=True)
+        watcher.start()
+
+        print(DIM + f" Thinking…" + RESET, flush=True)
+
+        # Run the LLM in a thread so we can abandon it if /end fires first
+        _question_box: list = []
+
+        def _run_llm() -> None:
+            _question_box.append(runner.handle_user_input(answer))
+
+        llm_thread = threading.Thread(target=_run_llm, daemon=True)
+        llm_thread.start()
+
+        # Poll: wake up frequently to check _abort; abandon as soon as it fires
+        _exit_after_turn = False
+        while llm_thread.is_alive():
+            llm_thread.join(timeout=0.1)
+            if _abort.is_set() and answered_count >= min_answers:
+                _exit_after_turn = True
+                break
+
+        # Always wait for the LLM thread to fully finish before proceeding —
+        # it is writing to runner.state, and end_session() must see a clean state.
+        llm_thread.join()
+
+        if _exit_after_turn:
+            _info("Session ended early as requested.")
+            break
 
         if debug:
             cls = runner.state.get("classification")
@@ -319,6 +391,7 @@ def run_session(
                 print(DIM + f"  [classify] {getattr(cls,'response_class','?')} / "
                       f"{getattr(cls,'alignment','?')} / conf={getattr(cls,'confidence',0):.2f}" + RESET)
 
+        question = _question_box[0] if _question_box else ""
         _speak(question, voice)
 
     # ── Phase 5: End session ──────────────────────────────────────────────────
