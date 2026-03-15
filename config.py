@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_model: str = "all-MiniLM-L6-v2"
 
+    # Q&A session limits
+    min_questions: int = 3
+    max_questions: int = 5
+
     # Memory
     working_memory_window: int = 20          # turns
     retrieval_top_k: int = 5                 # per store
