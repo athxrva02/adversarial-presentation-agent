@@ -61,9 +61,21 @@ class EpisodicMemory:
         results = self._vec.query(query, _CLAIMS_COLLECTION, top_k)
         claims: list[ClaimRecord] = []
         for r in results:
-            claim = self._rel.get_claim(r["id"])
-            if claim is not None:
-                claims.append(claim)
+            claim_dict = self._rel.get_claim(r["id"])
+            if claim_dict is not None:
+                try:
+                    claims.append(ClaimRecord(
+                        claim_id=claim_dict["claim_id"],
+                        session_id=claim_dict["session_id"],
+                        turn_number=int(claim_dict["turn_number"]),
+                        claim_text=claim_dict["claim_text"],
+                        alignment=claim_dict.get("alignment", "novel"),
+                        mapped_to_slide=claim_dict.get("mapped_to_slide"),
+                        prior_conflict=claim_dict.get("prior_conflict"),
+                        timestamp=claim_dict.get("timestamp", datetime.now()),
+                    ))
+                except Exception:
+                    continue
         return claims
 
     def retrieve_sessions(self, query: str, top_k: int) -> list[SessionRecord]:

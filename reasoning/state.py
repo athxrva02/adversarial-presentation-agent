@@ -41,6 +41,8 @@ class SessionState(TypedDict, total=False):
 
     # Contradiction module I/O
     conflict_result: Optional[ConflictResult]
+    conflict_prior_claim_id: Optional[str]
+
 
     # Accumulated session data
     # A list of turn dicts, e.g. {"role": "user"|"assistant", "content": "...", ...}
@@ -58,6 +60,7 @@ class SessionState(TypedDict, total=False):
     # Negotiation artifacts
     negotiation_items: Optional[list[dict[str, Any]]]
     negotiation_decisions: Optional[list[dict[str, Any]]]
+
 
     # Control flags
     session_active: bool
