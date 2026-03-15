@@ -8,6 +8,8 @@ and then end the session to see the final summary and score.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import datetime
 from typing import Any
 
@@ -29,8 +31,22 @@ def _safe_json(obj: Any) -> str:
         return str(obj)
 
 
+def _make_memory_module():
+    """Create a MemoryModule backed by a temporary directory."""
+    from memory.module import MemoryModule
+    from storage.vector_store import VectorStore
+    from storage.relational_store import RelationalStore
+
+    data_dir = os.path.join(tempfile.gettempdir(), "adversarial_dev")
+    os.makedirs(os.path.join(data_dir, "db"), exist_ok=True)
+    vs = VectorStore(chroma_path=os.path.join(data_dir, "chroma"))
+    rs = RelationalStore(db_path=os.path.join(data_dir, "db", "dev.db"))
+    return MemoryModule(vector_store=vs, relational_store=rs)
+
+
 def main() -> None:
-    runner = SessionRunner()
+    mm = _make_memory_module()
+    runner = SessionRunner(memory_module=mm)
     _print_header(runner.state["session_id"])
 
     while True:
