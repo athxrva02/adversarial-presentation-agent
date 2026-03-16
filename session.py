@@ -302,35 +302,42 @@ def run_session(
     answered_count = 0  # number of completed answer→question exchanges
 
     print(DIM + f"  Q&A: answer {min_answers}–{max_answers} questions. "
-          f"Commands: /end (after {min_answers} answers) " + RESET)
+          f"Commands: /end " + RESET)
+
+    def _confirm_early_exit() -> bool:
+        """Ask the user to confirm they want to end before the minimum. Returns True = end."""
+        print()
+        print(YELLOW + "  ⚠  " + RESET + f"You have only answered {answered_count}/{min_answers} required questions.")
+        print(DIM + "     End the Q&A now and go to scoring? [yes / no]" + RESET)
+        try:
+            reply = input("     > ").strip().lower()
+        except EOFError:
+            return False
+        return reply in {"yes", "y"}
 
     while runner.state.get("session_active", True):
         # ── Collect one answer ────────────────────────────────────────────────
         answer = None
         while answer is None:
-            if answered_count >= min_answers:
-                prompt_line = (
-                    f"Press Enter to START your answer, then Enter to STOP. "
-                    f"(answer {answered_count + 1}/{max_answers} — type /end to finish)"
-                )
-            else:
-                prompt_line = (
-                    f"Press Enter to START your answer, then Enter to STOP. "
-                    f"(answer {answered_count + 1}/{max_answers})"
-                )
+            prompt_line = (
+                f"Press Enter to START your answer, then Enter to STOP. "
+                f"(answer {answered_count + 1}/{max_answers}"
+                + (" — /end to finish)" if answered_count >= min_answers else ")")
+            )
             result = _record_speech(prompt_line, label="answer")
 
             if result == "/end":
                 if answered_count >= min_answers:
                     break
                 else:
-                    remaining = min_answers - answered_count
-                    _warn(
-                        f"Please answer at least {remaining} more question(s) before ending. "
-                        f"({answered_count}/{min_answers} answered so far)"
-                    )
-                    result = None
-                    continue
+                    # Below minimum — ask for confirmation
+                    if _confirm_early_exit():
+                        break
+                    else:
+                        _info("Continuing Q&A.")
+                        result = None
+                        continue
+
             answer = result
 
         if result == "/end":
