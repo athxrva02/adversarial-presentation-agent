@@ -18,11 +18,15 @@ Everything runs locally. No data leaves your machine.
 3. Agent: "Thank you. I will now ask you questions."
    └─ First question generated from your PDF + what you actually said
 
-4. Back-and-forth Q&A  (as many turns as you like)
+4. Back-and-forth Q&A
    └─ You speak → Whisper transcribes → LLM generates next question → agent speaks it
+   └─ Session ends automatically after 5 answers, or type /end to end early
 
-5. You type /end  →  session is scored
+5. Session is scored
    └─ Overall score, rubric breakdown, strengths, weaknesses, top priority for next time
+
+6. Contradiction negotiation (if any contradictions were detected)
+   └─ Review each conflict, accept / reject / clarify
 ```
 
 ---
@@ -145,6 +149,14 @@ python demo.py --pdf slides.pdf --debug
 
 Prints the classification label (weak/strong/evasion, alignment, confidence) after each of your turns.
 
+### Start with hybrid memory disabled
+
+```bash
+python demo.py --pdf slides.pdf --memory-disabled
+```
+
+Starts the session in document-only memory mode (see [Memory Modes](#memory-modes) below).
+
 ### Persist session data across runs
 
 By default, ChromaDB and SQLite data are written to a temp directory and cleared on restart. To keep them:
@@ -176,20 +188,61 @@ Agent ▸  I have received and processed your slides. Whenever you are ready,
 Agent ▸  What specific metric did you use to measure the 40% consumption increase,
          and how did you control for seasonal variation?
 
-  ●  Press Enter to START your answer, then Enter again to STOP.
+  ●  Press Enter to START your answer, then Enter to STOP. (answer 4/5)
 ```
 
 - Same pattern: **Enter** → speak → **Enter**
-- Type `/end` before pressing the first Enter to end the session
+- The prompt shows your current answer count
+- The session ends **automatically** after 5 answers
+- Type `/end` to end early.
 
 ### Ending early
 
 At any "Press Enter to START" prompt, type `/end` and press Enter:
 
 ```
-  ●  Press Enter to START your answer...
+  ●  Press Enter to START your answer...  (answer 2/5)
 /end
 ```
+
+If you type `/end` before answering 3 questions, you will be asked to confirm:
+
+```
+  ⚠  You have only answered 2/3 required questions.
+     End the Q&A now and go to scoring? [yes / no]
+     > 
+```
+
+Type `yes` to proceed to scoring, or `no` to continue answering.
+
+You can also type `/end` while the agent is **thinking** (generating its next question). It will finish processing your last answer, then end the session.
+
+
+## Memory Modes
+
+The agent maintains four types of memory, all stored locally in ChromaDB and SQLite.
+
+### Hybrid mode (default)
+
+All four stores are queried on every turn and fed into the LLM's context:
+
+| Store | What it holds | When it's written |
+|---|---|---|
+| **Document** | Your PDF, split into labelled chunks (claim / evidence / definition / conclusion) | Once, at startup |
+| **Episodic** | Every answer you gave, per session — `ClaimRecord` objects with alignment labels, plus a `SessionRecord` summary at the end | Each turn and at session end |
+| **Semantic** | Long-term patterns promoted from episodic data once they appear in ≥ 2 sessions (e.g. "user consistently gives unsupported answers") | End of session, via `promote_patterns()` |
+| **Common ground** | Negotiated truths from Phase 6 — contradictions you and the agent agreed to resolve | After contradiction negotiation |
+
+With hybrid memory the agent remembers not just your slides but your personal history of answering questions about them. Contradiction detection, recency-weighted retrieval, and pattern promotion all depend on the episodic, semantic, and common-ground stores being available.
+
+### Document-only mode (`--memory-disabled`)
+
+Only the **document** store is queried. The LLM still has its native short-term memory, the full turn-by-turn conversation history within the current session but no data from past sessions is retrieved.
+
+Use document-only mode when:
+- You are running a first session with a new PDF and have no prior history worth retrieving
+- You want to isolate one session from past performance data
+- You are debugging question quality without cross-session context
 
 ---
 
@@ -271,9 +324,10 @@ adversarial-presentation-agent/
 │
 ├── reasoning/
 │   ├── graph.py          ← LangGraph SessionRunner
-│   ├── nodes/            ← classify / retrieve / generate_question / score / summarise
+│   ├── nodes/            ← classify / retrieve / generate_question / detect_contradiction
+│   │                        mediate_contradiction / negotiate / score / summarise
 │   ├── prompts/          ← LLM prompt templates
-│   └── state.py          ← SessionState TypedDict
+│   └── state.py          ← SessionState TypedDict (includes memory_mode field)
 │
 ├── storage/
 │   ├── vector_store.py   ← ChromaDB wrapper
@@ -295,14 +349,19 @@ All settings are in `config.py` and can be overridden with a `.env` file:
 |---|---|---|
 | `model_name` | `qwen2.5:7b-instruct` | Ollama model |
 | `ollama_base_url` | `http://localhost:11434` | Ollama address |
-| `embedding_model` | `all-MiniLM-L6-v2` | Sentence-transformer |
+| `embedding_model` | `all-MiniLM-L6-v2` | Sentence-transformer for memory retrieval |
+| `min_questions` | `3` | Minimum answers before `/end` is accepted without confirmation |
+| `max_questions` | `5` | Session ends automatically after this many answers |
 | `max_chunk_tokens` | `256` | Max tokens per PDF chunk |
-| `retrieval_top_k` | `5` | Results per memory store |
-| `recency_decay_factor` | `0.85` | Decay per session age |
+| `retrieval_top_k` | `5` | Results returned per memory store per turn |
+| `promotion_threshold` | `2` | Sessions a pattern must appear in before semantic promotion |
+| `recency_decay_factor` | `0.85` | Multiplier per session of age for episodic retrieval ranking |
 | `sqlite_path` | `./data/db/agent.db` | SQLite path |
 | `chroma_path` | `./data/chroma` | ChromaDB path |
 
 Example `.env`:
 ```env
-MODEL_NAME=qwen2.5:0.5b-instruct
+MODEL_NAME=qwen2.5:7b-instruct
+MIN_QUESTIONS=3
+MAX_QUESTIONS=5
 ```
