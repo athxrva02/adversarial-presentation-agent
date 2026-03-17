@@ -92,6 +92,9 @@ class MemoryModule:
     def store_common_ground(self, entry: CommonGroundEntry) -> None:
         self._common_ground.store(entry)
 
+    def store_semantic_pattern(self, pattern: SemanticPattern) -> None:
+        self._semantic.store_pattern(pattern)
+
     # ---- Promotion ----------------------------------------------------------
 
     def promote_patterns(self, session_id: str) -> list[SemanticPattern]:

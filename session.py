@@ -326,3 +326,111 @@ def run_session(
     print(DIM + "  Analysing session…" + RESET, flush=True)
     runner.end_session()
     _display_summary(runner, voice)
+    _run_negotiation_phase(runner, voice)
+
+  # ── Phase 6: Negotiation ──────────────────────────────────────────────────
+def _run_negotiation_phase(runner, voice: bool) -> None:
+    items = list(runner.state.get("negotiation_items") or [])
+    if not items:
+        _info("No contradictions detected.")
+        return
+
+    _section("Phase 6 - Contradiction Negotiation")
+    print("  The following contradictions were detected:")
+
+    decisions: list[dict] = []
+
+    def _parse_decision(raw: str) -> str | None:
+        s = str(raw or "").strip().lower()
+        if not s:
+            return None
+        if s in {"a", "accept"}:
+            return "accept"
+        if s in {"r", "reject"}:
+            return "reject"
+        if s in {"c", "clarify"}:
+            return "clarify"
+
+        tokens = set(s.replace(",", " ").replace(".", " ").split())
+        if {"accept", "agree", "yes", "keep"} & tokens:
+            return "accept"
+        if {"reject", "no", "skip", "discard"} & tokens:
+            return "reject"
+        if {"clarify", "clarification", "explain"} & tokens:
+            return "clarify"
+        return None
+
+    def _capture_decision(default_decision: str) -> str:
+        # Fixed bug 1:Voice mode silently dropped
+        if voice:
+            spoken = _record_speech(
+                "Press Enter to START, then say: accept, reject, or clarify. Press Enter to STOP.",
+                label="negotiation",
+            )
+            if spoken == "/end":
+                return "reject"
+            parsed = _parse_decision(spoken or "")
+            if parsed is not None:
+                return parsed
+            _warn("Could not parse voice decision; please type it.")
+        #end of bug 1
+        typed = input("      decision [a/r/c] (Enter=default): ").strip().lower()
+        if not typed:
+            return ""
+        parsed = _parse_decision(typed)
+        if parsed is not None:
+            return parsed
+        _warn("Invalid input; using default.")
+        return default_decision
+
+    def _capture_clarification() -> str:
+        if voice:
+            spoken = _record_speech(
+                "Press Enter to START, then give your clarification. Press Enter to STOP.",
+                label="negotiation",
+            )
+            if spoken == "/end":
+                return ""
+            spoken_clean = str(spoken or "").strip()
+            if spoken_clean:
+                return spoken_clean
+            _warn("Voice input not captured; please type it.")
+        return input("      clarification (empty = reject): ").strip()
+
+    for idx, item in enumerate(items, start=1):
+        print()
+        explanation = str(item.get("conflict_explanation") or item.get("proposed_text") or "Contradiction detected.").strip()
+        past_claim = str(item.get("past_claim", "")).strip() or "(not available)"
+        current_claim = str(item.get("current_claim", "")).strip() or "(not available)"
+        default_decision = str(item.get("default_decision", "clarify")).strip().lower() or "clarify"
+        if default_decision not in {"accept", "reject", "clarify"}:
+            default_decision = "clarify"
+
+        print(f"  [{idx}] Contradiction detected: {explanation}")
+        print(f"      Past claim    : {past_claim}")
+        print(f"      Current claim : {current_claim}")
+        print("      Options       : [a] Accept (update common ground), [r] Reject, [c] Clarify")
+
+        cmd = _capture_decision(default_decision)
+        decision = cmd or default_decision
+
+        if decision == "clarify":
+            clarified = _capture_clarification()
+            if clarified:
+                decisions.append(
+                    {
+                        "item_id": item["item_id"],
+                        "decision": "update",
+                        "updated_text": clarified,
+                        "proposed_by": "user",
+                    }
+                )
+            else:
+                decisions.append({"item_id": item["item_id"], "decision": "reject"})
+            continue
+
+        decisions.append({"item_id": item["item_id"], "decision": decision})
+
+    runner.commit_negotiation(decisions)
+    kept = sum(1 for d in decisions if d.get("decision") in {"accept", "update"})
+    _ok(f"Negotiation saved. {kept}/{len(decisions)} contradictions accepted/clarified.")

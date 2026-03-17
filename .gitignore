@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 *.pyo
 .venv*
+venv/
 *.egg-info/
 
 data/db/
@@ -16,3 +17,7 @@ data/chroma/
 
 .idea/
 .vscode/
+.tmp/stat
+.pytest_cache/
+/tmp/
+.pytest_tmp/
