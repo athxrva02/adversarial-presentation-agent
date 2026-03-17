@@ -97,6 +97,8 @@ def main():
                         help="Generate a built-in demo PDF and run the full pipeline")
     parser.add_argument("--debug", action="store_true",
                         help="Print LLM classification labels after each turn")
+    parser.add_argument("--memory-disabled", action="store_true",
+                        help="Start with hybrid memory disabled (document memory only).")
     parser.add_argument("--demo-dir",
                         default=os.path.join(tempfile.gettempdir(), "adversarial_agent"),
                         help="Directory for session data (default: system temp)")
@@ -127,7 +129,13 @@ def main():
         sys.exit(1)
 
     from session import run_session
-    run_session(pdf_path=args.pdf, demo_dir=args.demo_dir, voice=voice, debug=args.debug)
+    run_session(
+        pdf_path=args.pdf,
+        demo_dir=args.demo_dir,
+        voice=voice,
+        debug=args.debug,
+        hybrid_memory=not args.memory_disabled,
+    )
 
 
 if __name__ == "__main__":

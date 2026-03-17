@@ -65,5 +65,8 @@ class SessionState(TypedDict, total=False):
     # Control flags
     session_active: bool
 
+    # Memory mode: "hybrid" uses all stores; "document_only" uses PDF chunks only.
+    memory_mode: str
+
     # Internal: injected MemoryModule reference (not serialised)
     _memory_module: Optional[Any]
