@@ -45,7 +45,7 @@ class SessionState(TypedDict, total=False):
 
 
     # Accumulated session data
-    # A list of turn dicts, e.g. {"role": "user"|"assistant", "content": "...", ...}
+    # A list of turn dicts, e.g. {"role": "user"|"agent", "content": "...", ...}
     turns: Annotated[list[dict[str, Any]], add]
 
     # Claim records appended per user turn (or per extracted claim if you later refine)

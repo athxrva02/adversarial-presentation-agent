@@ -156,7 +156,8 @@ class SessionRunner:
         self.state["user_input"] = text
         current_turn = self.state["turn_number"]
 
-        self.state["turns"].append({"role": "user", "content": text})
+        user_turn_idx = len(self.state["turns"])
+        self.state["turns"].append({"role": "user", "content": text, "turn_number": current_turn})
 
         out: Dict[str, Any] = self.practice_graph.invoke(self.state)
 
@@ -175,6 +176,14 @@ class SessionRunner:
 
         self.state.update(out)
 
+        # Enrich user turn with classification data now that we have it
+        classification = self.state.get("classification")
+        if classification and user_turn_idx < len(self.state["turns"]):
+            turn = self.state["turns"][user_turn_idx]
+            turn["response_class"] = classification.response_class.value if hasattr(classification.response_class, "value") else str(classification.response_class)
+            turn["alignment"] = classification.alignment.value if hasattr(classification.alignment, "value") else str(classification.alignment)
+            turn["confidence"] = classification.confidence
+
         if self._memory is not None:
             for claim in claims:
                 if getattr(claim, "turn_number", None) == current_turn:
@@ -182,7 +191,7 @@ class SessionRunner:
 
         agent_resp = (out.get("agent_response") or "").strip()
         if agent_resp:
-            self.state["turns"].append({"role": "assistant", "content": agent_resp})
+            self.state["turns"].append({"role": "agent", "content": agent_resp, "turn_number": current_turn})
 
         return agent_resp
 
