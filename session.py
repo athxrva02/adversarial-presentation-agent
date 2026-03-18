@@ -408,6 +408,11 @@ def run_session(
     _display_summary(runner, voice)
     _run_negotiation_phase(runner, voice)
 
+    # ── Export results to CSV ─────────────────────────────────────────────────
+    from export import export_session
+    results_dir = export_session(runner.state, pdf_path)
+    _ok(f"Results saved → {BOLD}{results_dir}/{RESET}")
+
   # ── Phase 6: Negotiation ──────────────────────────────────────────────────
 def _run_negotiation_phase(runner, voice: bool) -> None:
     items = list(runner.state.get("negotiation_items") or [])
