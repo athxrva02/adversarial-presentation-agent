@@ -93,7 +93,7 @@ class SessionRunner:
     - end session
     """
 
-    def __init__(self, *, session_id: Optional[str] = None, memory_module=None):
+    def __init__(self, *, session_id: Optional[str] = None, memory_module=None, hybrid_memory: bool = True):
         self.practice_graph = build_practice_graph()
         self.end_graph = build_session_end_graph()
         self._memory = memory_module
@@ -123,6 +123,8 @@ class SessionRunner:
             "negotiation_decisions": None,
 
             "session_active": True,
+
+            "memory_mode": "hybrid" if hybrid_memory else "document_only",
 
             "_memory_module": memory_module,
             "conflict_prior_claim_id": None,
@@ -198,7 +200,6 @@ class SessionRunner:
 
         session_id = self.state.get("session_id", "unknown_session")
 
-        #Fix:Design Issue 4:Partial writes with no error signal
         failed: list[tuple[str, str]] = []
         for d in decisions:
             item = items.get(d.get("item_id"))

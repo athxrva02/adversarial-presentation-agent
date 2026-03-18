@@ -153,12 +153,13 @@ def _ingest_pdf(pdf_path: str, vs, rs) -> int:
 
 # ── Phase 2: Session initialisation ──────────────────────────────────────────
 
-def _init_runner(vs, rs):
+def _init_runner(vs, rs, *, hybrid_memory: bool = True):
     from memory.module import MemoryModule
     from reasoning.graph import SessionRunner
     mm = MemoryModule(vector_store=vs, relational_store=rs)
-    runner = SessionRunner(memory_module=mm)
-    _ok(f"Session ready  (id: {BOLD}{runner.state['session_id']}{RESET})")
+    runner = SessionRunner(memory_module=mm, hybrid_memory=hybrid_memory)
+    mode_label = "hybrid" if hybrid_memory else "document-only"
+    _ok(f"Session ready  (id: {BOLD}{runner.state['session_id']}{RESET})  [memory: {mode_label}]")
     return runner
 
 
@@ -221,21 +222,17 @@ def _display_summary(runner, voice: bool) -> None:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def run_session(
-    pdf_path: str,
-    demo_dir: str,
-    *,
-    voice: bool = True,
-    debug: bool = False,
+def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool = False, hybrid_memory: bool = True,
 ) -> None:
     """
     Run a complete adversarial presentation practice session.
 
     Args:
-        pdf_path:  Path to the user's presentation PDF.
-        demo_dir:  Directory for ChromaDB + SQLite data.
-        voice:     If True, agent speaks all its lines via TTS.
-        debug:     If True, print classification labels each turn.
+        pdf_path:       Path to the user's presentation PDF.
+        demo_dir:       Directory for ChromaDB + SQLite data.
+        voice:          If True, agent speaks all its lines via TTS.
+        debug:          If True, print classification labels each turn.
+        hybrid_memory:  If True (default), use all memory stores. If False, use document memory only.
     """
     os.makedirs(demo_dir, exist_ok=True)
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -271,7 +268,7 @@ def run_session(
 
     # ── Phase 3: Init session runner, feed presentation as turn 0 ────────────
     _section("Phase 3 — Session Initialisation")
-    runner = _init_runner(vs, rs)
+    runner = _init_runner(vs, rs, hybrid_memory=hybrid_memory)
 
     # Feed the full presentation as the first user input so the agent
     # has context grounded in BOTH the PDF chunks AND what was actually said
