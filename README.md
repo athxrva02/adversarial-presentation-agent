@@ -195,6 +195,7 @@ Agent ▸  What specific metric did you use to measure the 40% consumption incre
 - The prompt shows your current answer count
 - The session ends **automatically** after 5 answers
 - Type `/end` to end early.
+- Type `/reset` to reset memory.
 
 ### Ending early
 
@@ -216,6 +217,24 @@ If you type `/end` before answering 3 questions, you will be asked to confirm:
 Type `yes` to proceed to scoring, or `no` to continue answering.
 
 You can also type `/end` while the agent is **thinking** (generating its next question). It will finish processing your last answer, then end the session.
+
+### Resetting
+
+At any "Press Enter to START" prompt, type `/reset` and press Enter:
+
+```
+  ●  Press Enter to START your answer...  (answer 2/5)
+/reset
+```
+
+You will be asked to confirm.
+```
+  ⚠  If you reset now, all memory of your sessions will be lost and you will start over with a fresh agent.
+     End the session now and reset the agent? [yes / no]
+     > 
+```
+
+Type `yes` to reset the agent's entire memory, or `no` to continue with your sessions.
 
 
 ## Memory Modes

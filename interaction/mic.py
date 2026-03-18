@@ -15,6 +15,7 @@ Public API:
 
 from __future__ import annotations
 
+import cmd
 import logging
 import os
 import platform
@@ -119,6 +120,8 @@ def record(
     cmd = input().strip().lower()
     if cmd in {"/end", "end", "quit", "exit"}:
         return "/end"
+    if cmd in {"/reset", "reset", "new", "new_user"}:
+        return "/reset"
 
     print("  ◉  Recording…  (press Enter to stop)", flush=True)
 

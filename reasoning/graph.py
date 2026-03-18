@@ -302,3 +302,27 @@ class SessionRunner:
                 )
 
         return self.state.get("session_summary")
+    
+    def reset_state(self, *, new_session_id: Optional[str] = None) -> None:
+        sid = new_session_id or f"sess_{uuid4().hex[:8]}"
+        self.state = {
+            "session_id": sid,
+            "user_input": "",
+            "turn_number": 0,
+            "classification": None,
+            "agent_response": None,
+            "phase": "practice",
+            "memory_bundle": None,
+            "conflict_result": None,
+            "turns": [],
+            "claims": [],
+            "session_summary": None,
+            "score_breakdown": {},
+            "negotiation_items": None,
+            "negotiation_decisions": None,
+            "session_active": True,
+            "memory_mode": self.state.get("memory_mode", "hybrid"),
+            "_memory_module": self._memory,
+            "conflict_prior_claim_id": None,
+        }
+        self._started_at = datetime.now()

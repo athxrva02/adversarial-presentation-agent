@@ -129,13 +129,21 @@ def main():
         sys.exit(1)
 
     from session import run_session
-    run_session(
-        pdf_path=args.pdf,
-        demo_dir=args.demo_dir,
-        voice=voice,
-        debug=args.debug,
-        hybrid_memory=not args.memory_disabled,
-    )
+
+    while True:
+        result = run_session(
+            pdf_path=args.pdf,
+            demo_dir=args.demo_dir,
+            voice=voice,
+            debug=args.debug,
+            hybrid_memory=not args.memory_disabled,
+        )
+
+        if result == "RESET":
+            print()
+            print(DIM + "  Memory cleared." + RESET)
+
+        break
 
 
 if __name__ == "__main__":

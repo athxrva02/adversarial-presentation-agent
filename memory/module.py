@@ -42,6 +42,12 @@ class MemoryModule:
         self._common_ground = CommonGroundMemory(vector_store=vec, relational_store=rel)
         self._rel = rel
 
+    def clear_all(self) -> None:
+        self._document.clear()
+        self._episodic.clear()
+        self._semantic.clear()
+        self._common_ground.clear()
+
     # ---- Retrieval ----------------------------------------------------------
 
     def retrieve(

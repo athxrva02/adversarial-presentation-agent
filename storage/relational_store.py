@@ -437,6 +437,31 @@ class RelationalStore:
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
+    # Clear Store
+    # ------------------------------------------------------------------    
+
+    def delete_all_claims(self) -> None:
+        conn = self._get_conn()
+        conn.execute("DELETE FROM claim_records")
+        conn.commit()
+
+    def delete_all_sessions(self) -> None:
+        conn = self._get_conn()
+        conn.execute("DELETE FROM session_records")
+        conn.commit()
+
+    def delete_all_patterns(self) -> None:
+        conn = self._get_conn()
+        conn.execute("DELETE FROM pattern_evidence")
+        conn.execute("DELETE FROM semantic_patterns")
+        conn.commit()
+
+    def delete_all_common_ground(self) -> None:
+        conn = self._get_conn()
+        conn.execute("DELETE FROM common_ground")
+        conn.commit()
+
+    # ------------------------------------------------------------------
     # Utility
     # ------------------------------------------------------------------
 

@@ -21,3 +21,4 @@ data/chroma/
 .pytest_cache/
 /tmp/
 .pytest_tmp/
+.tmp/
