@@ -47,8 +47,36 @@ def _clean_question(text: str) -> str:
             first = first + "?"
 
     return first
+#Improving question generation change1: giving the agent context of the previous questions to make more sense of the answer
+def _get_previous_assistant_question(turns: list[dict[str, Any]]) -> str:
+    if not turns:
+        return ""
 
+    # Current state already contains the latest user turn.
+    # Walk backwards and find the most recent assistant turn before it.
+    for turn in reversed(turns[:-1]):
+        if str(turn.get("role", "")).strip().lower() == "assistant":
+            return str(turn.get("content", "")).strip()
+    return ""
+#end of change1
+#change3 Pass focused context, not the whole memory bundle
+from reasoning.prompts._base import (
+    render_document_context,
+    render_claims,
+    render_semantic_patterns,
+    render_common_ground,
+)
+def _build_focused_context(memory_bundle: Any) -> str:
+    if memory_bundle is None:
+        return "FOCUSED_CONTEXT: (none)\n"
 
+    parts = ["FOCUSED_CONTEXT:"]
+    parts.append(render_document_context(getattr(memory_bundle, "document_context", [])[:2]))
+    parts.append(render_claims(getattr(memory_bundle, "episodic_claims", [])[:3], max_items=3))
+    parts.append(render_semantic_patterns(getattr(memory_bundle, "semantic_patterns", [])[:2], max_items=2))
+    parts.append(render_common_ground(getattr(memory_bundle, "common_ground", [])[:2], max_items=2))
+    return "\n".join(parts)
+#end of change3
 def run(state: SessionState) -> Dict[str, Any]:
     """
     Generate one follow-up question.
@@ -62,12 +90,19 @@ def run(state: SessionState) -> Dict[str, Any]:
     memory_bundle = state.get("memory_bundle")
     classification = state.get("classification")
     conflict_result = state.get("conflict_result")
+    #change1
+    turns = list(state.get("turns", []) or [])
+    previous_question = _get_previous_assistant_question(turns)
+    #end of change1
+    focused_context = _build_focused_context(memory_bundle) #change3
 
     prompt = build_question_generation_prompt(
         utterance=utterance,
         memory_bundle=memory_bundle,
         classification=classification,
         conflict_result=conflict_result,
+        previous_question=previous_question, #change1
+        focused_context=focused_context, #change3
     )
 
     raw = call_llm_text(

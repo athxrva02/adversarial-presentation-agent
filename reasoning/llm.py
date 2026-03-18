@@ -156,8 +156,8 @@ def call_llm_structured(
 def opts_practice_question() -> LLMOptions:
     # Slightly higher temperature for varied questions
     return LLMOptions(
-        temperature=0.5,
-        num_predict=250,
+        temperature=0.2, #change4:was 0.5, reduced to 0.2 to keep questions more focused and relevant
+        num_predict=180, #change4: was 250, reduced to 180 to encourage more concise questions
         num_ctx=getattr(settings, "num_ctx", 4096),
     )
 
