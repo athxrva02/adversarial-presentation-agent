@@ -79,16 +79,34 @@ def _transcribe_wav(wav_path: str) -> str:
             pass
 
 
-def _record_speech(prompt_line: str, label: str = "voice") -> str | None:
+def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -> str | None:
     """
-    Record from mic.
+    Capture one user utterance.
+    voice=True  → record from microphone, transcribe with Whisper.
+    voice=False → read a line of typed text from stdin (text-only mode).
     Returns transcript string, None to retry, 
-    "/end" to end session, or "/reset" to wipe memory and restart for a new user.
+    "/end" to end session, or "/restart" to wipe memory and end session.
     """
-    from interaction.mic import record
 
     print()
     print(BOLD + CYAN + "  ● " + RESET + prompt_line)
+
+    # ── Text-only path (--no-voice) ───────────────────────────────────────
+    if not voice:
+        try:
+            text = input(BOLD + CYAN + "  You > " + RESET).strip()
+        except EOFError:
+            return "/end"
+        if not text:
+            return None
+        if text.lower() in {"/end", "end", "quit", "exit"}:
+            return "/end"
+        _user_label(label)
+        print(text)
+        return text
+
+    # ── Voice path ────────────────────────────────────────────────────────
+    from interaction.mic import record
 
     wav_path = record(prompt="", sample_rate=16000)
 
@@ -266,6 +284,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
         result = _record_speech(
             "Press Enter to START your presentation, then Enter again to STOP.",
             label="presentation",
+            voice=voice,
         )
         if result == "/end":
             print(DIM + "Session cancelled." + RESET)
@@ -285,7 +304,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
     # Feed the full presentation as the first user input so the agent
     # has context grounded in BOTH the PDF chunks AND what was actually said
     transition_msg = (
-        "Thank you. I have listened to your presentation. "
+        "Thank you for your presentation. "
         "I will now ask you a series of follow-up questions. "
         "Please answer each one as clearly and specifically as you can."
     )
@@ -436,11 +455,11 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         return None
 
     def _capture_decision(default_decision: str) -> str:
-        # Fixed bug 1:Voice mode silently dropped
         if voice:
             spoken = _record_speech(
                 "Press Enter to START, then say: accept, reject, or clarify. Press Enter to STOP.",
                 label="negotiation",
+                voice=voice,
             )
             if spoken == "/end":
                 return "/end"
@@ -450,7 +469,6 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
             if parsed is not None:
                 return parsed
             _warn("Could not parse voice decision; please type it.")
-        #end of bug 1
         typed = input("      decision [a/r/c] (Enter=default): ").strip().lower()
         if not typed:
             return ""
@@ -465,6 +483,7 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
             spoken = _record_speech(
                 "Press Enter to START, then give your clarification. Press Enter to STOP.",
                 label="negotiation",
+                voice=voice,
             )
             if spoken == "/end":
                 return "/end"
