@@ -43,10 +43,10 @@ class MemoryModule:
         self._rel = rel
 
     def clear_all(self) -> None:
-        self._document.clear()
-        self._episodic.clear()
-        self._semantic.clear()
         self._common_ground.clear()
+        self._semantic.clear()
+        self._episodic.clear()
+        self._document.clear()
 
     # ---- Retrieval ----------------------------------------------------------
 
