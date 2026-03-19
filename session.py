@@ -362,7 +362,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
                 f"Press Enter to START your answer, then Enter to STOP. "
                 f"(answer {answered_count + 1}/{max_answers}"
                 + (" — /end to finish, /reset for new user)" if answered_count >= min_answers else " — /reset for new user)")            )
-            result = _record_speech(prompt_line, label="answer")
+            result = _record_speech(prompt_line, label="answer", voice=voice)
 
             if result == "/end":
                 if answered_count >= min_answers:
