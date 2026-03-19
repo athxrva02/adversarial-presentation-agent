@@ -293,6 +293,7 @@ class SessionRunner:
         # Persist session record and promote patterns
         if self._memory is not None:
             session_record = self.state.get("session_summary")
+            session_record.duration_seconds = duration
             if session_record is not None:
                 self._memory.store_session(
                     session_record, self.state.get("claims", [])
