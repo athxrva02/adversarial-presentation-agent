@@ -17,6 +17,13 @@ class SemanticMemory:
     ) -> None:
         self._vec = vector_store
         self._rel = relational_store
+    
+    def clear(self) -> None:
+        rows = self._rel.get_all_patterns(status=None)
+        ids = [r["pattern_id"] for r in rows]
+        if ids:
+            self._vec.delete(ids=ids, collection_name=_COLLECTION)
+        self._rel.delete_all_patterns()
 
     def store_pattern(self, pattern: SemanticPattern) -> None:
         self._rel.upsert_pattern(pattern)

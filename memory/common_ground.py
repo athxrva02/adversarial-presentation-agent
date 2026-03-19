@@ -17,6 +17,13 @@ class CommonGroundMemory:
         self._vec = vector_store
         self._rel = relational_store
 
+    def clear(self) -> None:
+        rows = self._rel.get_all_common_ground()
+        ids = [r["cg_id"] for r in rows]
+        if ids:
+            self._vec.delete(ids=ids, collection_name=_COLLECTION)
+        self._rel.delete_all_common_ground()
+
     def store(self, entry: CommonGroundEntry) -> None:
         self._rel.upsert_common_ground(entry)
         self._vec.upsert(

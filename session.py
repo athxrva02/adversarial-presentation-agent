@@ -85,7 +85,7 @@ def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -
     voice=True  → record from microphone, transcribe with Whisper.
     voice=False → read a line of typed text from stdin (text-only mode).
     Returns transcript string, None to retry, 
-    "/end" to end session.
+    "/end" to end session, or "/restart" to wipe memory and end session.
     """
 
     print()
@@ -112,6 +112,8 @@ def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -
 
     if wav_path == "/end":
         return "/end"
+    if wav_path == "/reset":
+        return "/reset"
 
     if wav_path is None:
         _warn("Mic level too low — check your microphone is not muted.")
@@ -148,6 +150,11 @@ def _setup_stores(demo_dir: str):
     rs = RelationalStore(db_path=os.path.join(demo_dir, "db", "session.db"))
     return vs, rs
 
+def _clear_demo_storage(vs, rs) -> None:
+    from memory.module import MemoryModule
+
+    mm = MemoryModule(vector_store=vs, relational_store=rs)
+    mm.clear_all()
 
 # ── Phase 1: PDF ingestion ────────────────────────────────────────────────────
 
@@ -242,7 +249,7 @@ def _display_summary(runner, voice: bool) -> None:
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool = False, hybrid_memory: bool = True,
-) -> None:
+) -> str | None:
     """
     Run a complete adversarial presentation practice session.
 
@@ -282,6 +289,10 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
         if result == "/end":
             print(DIM + "Session cancelled." + RESET)
             return
+        if result == "/reset":
+            _info("Reset requested. Clearing all memory for a new user.")
+            _clear_demo_storage(vs, rs)
+            return "RESET"
         presentation_transcript = result
 
     _info(f"Presentation captured ({len(presentation_transcript.split())} words)")
@@ -319,13 +330,24 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
     answered_count = 0  # number of completed answer→question exchanges
 
     print(DIM + f"  Q&A: answer {min_answers}–{max_answers} questions. "
-          f"Commands: /end " + RESET)
+        f"Commands: /end, /reset" + RESET)
 
     def _confirm_early_exit() -> bool:
         """Ask the user to confirm they want to end before the minimum. Returns True = end."""
         print()
         print(YELLOW + "  ⚠  " + RESET + f"You have only answered {answered_count}/{min_answers} required questions.")
         print(DIM + "     End the Q&A now and go to scoring? [yes / no]" + RESET)
+        try:
+            reply = input("     > ").strip().lower()
+        except EOFError:
+            return False
+        return reply in {"yes", "y"}
+    
+    def _confirm_early_reset() -> bool:
+        """Ask the user to confirm they want to reset the agent. Returns True = reset."""
+        print()
+        print(YELLOW + "  ⚠  " + RESET + f"If you reset now, all memory of your sessions will be lost and you will start over with a fresh agent.")
+        print(DIM + "     End the session now and reset the agent? [yes / no]" + RESET)
         try:
             reply = input("     > ").strip().lower()
         except EOFError:
@@ -339,8 +361,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             prompt_line = (
                 f"Press Enter to START your answer, then Enter to STOP. "
                 f"(answer {answered_count + 1}/{max_answers}"
-                + (" — /end to finish)" if answered_count >= min_answers else ")")
-            )
+                + (" — /end to finish, /reset for new user)" if answered_count >= min_answers else " — /reset for new user)")            )
             result = _record_speech(prompt_line, label="answer", voice=voice)
 
             if result == "/end":
@@ -355,6 +376,16 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
                         result = None
                         continue
 
+            if result == "/reset":
+                if _confirm_early_reset():
+                    _info("Reset requested. Clearing all memory for a new user.")
+                    _clear_demo_storage(vs, rs)
+                    return "RESET"
+                else:
+                    _info("Continuing Q&A.")
+                    result = None
+                    continue
+
             answer = result
 
         if result == "/end":
@@ -366,48 +397,9 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _info(f"Maximum of {max_answers} answers reached. Ending session.")
             break
 
-        # ── Generate next question; /end typed here ends immediately ─────────
-        # A background thread watches stdin. If the user types /end while the
-        # LLM is running, _abort is set and we skip the question entirely.
-        _abort = threading.Event()
-
-        def _watch_for_abort(event: threading.Event) -> None:
-            try:
-                line = input()
-                if line.strip().lower() in {"/end", "end", "quit", "exit"}:
-                    event.set()
-            except EOFError:
-                pass
-
-        watcher = threading.Thread(target=_watch_for_abort, args=(_abort,), daemon=True)
-        watcher.start()
-
-        print(DIM + f" Thinking…" + RESET, flush=True)
-
-        # Run the LLM in a thread so we can abandon it if /end fires first
-        _question_box: list = []
-
-        def _run_llm() -> None:
-            _question_box.append(runner.handle_user_input(answer))
-
-        llm_thread = threading.Thread(target=_run_llm, daemon=True)
-        llm_thread.start()
-
-        # Poll: wake up frequently to check _abort; abandon as soon as it fires
-        _exit_after_turn = False
-        while llm_thread.is_alive():
-            llm_thread.join(timeout=0.1)
-            if _abort.is_set() and answered_count >= min_answers:
-                _exit_after_turn = True
-                break
-
-        # Always wait for the LLM thread to fully finish before proceeding —
-        # it is writing to runner.state, and end_session() must see a clean state.
-        llm_thread.join()
-
-        if _exit_after_turn:
-            _info("Session ended early as requested.")
-            break
+        # NOTE: If we can /end while LLM is thinking, we should also be able to /reset while it's thinking, to skip straight to a new user without waiting for the current LLM turn to finish. 
+        print(DIM + " Thinking…" + RESET, flush=True)
+        question = runner.handle_user_input(answer)
 
         if debug:
             cls = runner.state.get("classification")
@@ -415,7 +407,6 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
                 print(DIM + f"  [classify] {getattr(cls,'response_class','?')} / "
                       f"{getattr(cls,'alignment','?')} / conf={getattr(cls,'confidence',0):.2f}" + RESET)
 
-        question = _question_box[0] if _question_box else ""
         _speak(question, voice)
 
     # ── Phase 5: End session ──────────────────────────────────────────────────
@@ -423,8 +414,14 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
     print(DIM + "  Analysing session…" + RESET, flush=True)
     runner.end_session()
     _display_summary(runner, voice)
-    _run_negotiation_phase(runner, voice)
-
+    try:
+        _run_negotiation_phase(runner, voice)
+    except RuntimeError as exc:
+        if str(exc) == "RESET_REQUESTED":
+            _info("Reset requested. Clearing all memory for a new user.")
+            _clear_demo_storage(vs, rs)
+            return "RESET"
+        raise
   # ── Phase 6: Negotiation ──────────────────────────────────────────────────
 def _run_negotiation_phase(runner, voice: bool) -> None:
     items = list(runner.state.get("negotiation_items") or [])
@@ -465,7 +462,9 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
                 voice=voice,
             )
             if spoken == "/end":
-                return "reject"
+                return "/end"
+            if spoken == "/reset":
+                return "/reset"
             parsed = _parse_decision(spoken or "")
             if parsed is not None:
                 return parsed
@@ -487,7 +486,9 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
                 voice=voice,
             )
             if spoken == "/end":
-                return ""
+                return "/end"
+            if spoken == "/reset":
+                return "/reset"
             spoken_clean = str(spoken or "").strip()
             if spoken_clean:
                 return spoken_clean
@@ -509,10 +510,19 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
         print("      Options       : [a] Accept (update common ground), [r] Reject, [c] Clarify")
 
         cmd = _capture_decision(default_decision)
-        decision = cmd or default_decision
+        if cmd == "/reset":
+            raise RuntimeError("RESET_REQUESTED")
+        if cmd == "/end":
+            decision = "reject"
+        else:
+            decision = cmd or default_decision
 
         if decision == "clarify":
             clarified = _capture_clarification()
+            if clarified == "/reset":
+                raise RuntimeError("RESET_REQUESTED")
+            if clarified == "/end":
+                clarified = ""            
             if clarified:
                 decisions.append(
                     {

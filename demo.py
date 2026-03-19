@@ -15,6 +15,10 @@ import os
 import sys
 import tempfile
 
+from storage.vector_store import VectorStore
+from storage.relational_store import RelationalStore
+from memory.module import MemoryModule
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Suppress ChromaDB telemetry — the capture() signature changed and it spams stderr
@@ -84,6 +88,13 @@ def _make_self_test_pdf(path: str) -> None:
     doc.close()
 
 
+def _clear_memory(demo_dir: str) -> None:
+    vs = VectorStore(chroma_path=os.path.join(demo_dir, "chroma"))
+    rs = RelationalStore(db_path=os.path.join(demo_dir, "db", "session.db"))
+    mm = MemoryModule(vector_store=vs, relational_store=rs)
+    mm.clear_all()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Adversarial Presentation Agent — practice your Q&A skills",
@@ -128,14 +139,53 @@ def main():
     if not _check_deps(voice=voice):
         sys.exit(1)
 
+    print()
+    print("  Session started." + RESET)
+    print(DIM + "  Type /reset to clear memory before starting this session, or press Enter to continue." + RESET)
+
+    try:
+        pre_cmd = input("  > ").strip().lower()
+    except EOFError:
+        pre_cmd = ""
+
+    if pre_cmd == "/reset":
+        _clear_memory(args.demo_dir)
+        print()
+        print(DIM + "  Memory cleared." + RESET)
+        return
+
     from session import run_session
-    run_session(
-        pdf_path=args.pdf,
-        demo_dir=args.demo_dir,
-        voice=voice,
-        debug=args.debug,
-        hybrid_memory=not args.memory_disabled,
-    )
+
+    while True:
+        result = run_session(
+            pdf_path=args.pdf,
+            demo_dir=args.demo_dir,
+            voice=voice,
+            debug=args.debug,
+            hybrid_memory=not args.memory_disabled,
+        )
+
+        if result == "RESET":
+            print()
+            print(DIM + "  Memory cleared." + RESET)
+            break
+
+        print()
+        print("  Session finished." + RESET)
+        print(DIM + "  Type /reset to clear memory for the next user, or press Enter to exit." + RESET)
+
+        try:
+            post_cmd = input("  > ").strip().lower()
+        except EOFError:
+            post_cmd = ""
+
+        if post_cmd == "/reset":
+            _clear_memory(args.demo_dir)
+            print()
+            print(DIM + "  Memory cleared." + RESET)
+            break
+
+        break
 
 
 if __name__ == "__main__":

@@ -18,6 +18,18 @@ class EpisodicMemory:
     ) -> None:
         self._vec = vector_store
         self._rel = relational_store
+    
+    def clear(self) -> None:
+        claim_ids = [r["claim_id"] for r in self._rel.get_recent_claims(limit=100000)]
+        session_ids = [r["session_id"] for r in self._rel.get_all_sessions(limit=100000)]
+
+        if claim_ids:
+            self._vec.delete(ids=claim_ids, collection_name=_CLAIMS_COLLECTION)
+        if session_ids:
+            self._vec.delete(ids=session_ids, collection_name=_SESSIONS_COLLECTION)
+
+        self._rel.delete_all_claims()
+        self._rel.delete_all_sessions()
 
     def store_claim(self, claim: ClaimRecord) -> None:
         self._rel.insert_claim(claim)
