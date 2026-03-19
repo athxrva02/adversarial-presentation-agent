@@ -385,6 +385,10 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             if result == "/end":
                 break
 
+        # If the user chose /end, break out of the outer loop too
+        if answer is None or answer == "/end":
+            break
+
         # Hard stop: max answers received — exit without generating another question
         answered_count += 1
         if answered_count >= max_answers:
@@ -416,7 +420,6 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _clear_demo_storage(vs, rs)
             return "RESET"
         raise
-    _run_negotiation_phase(runner, voice)
 
     # ── Export results to CSV ─────────────────────────────────────────────────
     from export import export_session
