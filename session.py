@@ -378,64 +378,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _info(f"Maximum of {max_answers} answers reached. Ending session.")
             break
 
-        # ── Generate next question; /end typed here ends immediately ─────────
-        # A background thread watches stdin. If the user types /end while the
-        # LLM is running, _abort is set and we skip the question entirely.
-
         # NOTE: If we can /end while LLM is thinking, we should also be able to /reset while it's thinking, to skip straight to a new user without waiting for the current LLM turn to finish. 
-        # NOTE 2: This code breaks because we have two concurrent readers on stdin: this watcher thread waiting on input(), and the main thread waiting on input() in record().
-        # For me, it breaks after question 2. So I commented this part out.
-        # Frankly, I don't think it's a huge problem if the user has to wait for the current question to finish generating before they can end/reset, since they can just type /end or /reset immediately after it finishes.
-
-        # _abort = threading.Event()
-
-        # def _watch_for_abort(event: threading.Event) -> None:
-        #     try:
-        #         line = input()
-        #         if line.strip().lower() in {"/end", "end", "quit", "exit"}:
-        #             event.set()
-        #     except EOFError:
-        #         pass
-
-        # watcher = threading.Thread(target=_watch_for_abort, args=(_abort,), daemon=True)
-        # watcher.start()
-
-        # print(DIM + f" Thinking…" + RESET, flush=True)
-
-        # # Run the LLM in a thread so we can abandon it if /end fires first
-        # _question_box: list = []
-
-        # def _run_llm() -> None:
-        #     _question_box.append(runner.handle_user_input(answer))
-
-        # llm_thread = threading.Thread(target=_run_llm, daemon=True)
-        # llm_thread.start()
-
-        # # Poll: wake up frequently to check _abort; abandon as soon as it fires
-        # _exit_after_turn = False
-        # while llm_thread.is_alive():
-        #     llm_thread.join(timeout=0.1)
-        #     if _abort.is_set() and answered_count >= min_answers:
-        #         _exit_after_turn = True
-        #         break
-
-        # # Always wait for the LLM thread to fully finish before proceeding —
-        # # it is writing to runner.state, and end_session() must see a clean state.
-        # llm_thread.join()
-
-        # if _exit_after_turn:
-        #     _info("Session ended early as requested.")
-        #     break
-
-        # if debug:
-        #     cls = runner.state.get("classification")
-        #     if cls:
-        #         print(DIM + f"  [classify] {getattr(cls,'response_class','?')} / "
-        #               f"{getattr(cls,'alignment','?')} / conf={getattr(cls,'confidence',0):.2f}" + RESET)
-
-        # question = _question_box[0] if _question_box else ""
-        # _speak(question, voice)
-
         print(DIM + " Thinking…" + RESET, flush=True)
         question = runner.handle_user_input(answer)
 
