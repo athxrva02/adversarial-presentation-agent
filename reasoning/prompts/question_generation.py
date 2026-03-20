@@ -51,6 +51,7 @@ def build_question_generation_prompt(
         + "\nYou are conducting adversarial Q&A practice.\n"
           "Output ONLY a single question. No bullet points, no explanations.\n"
           "The question must be concrete, specific and test understanding.\n" #change2:added "concrete"
+          "Do not include chunk IDs, claim IDs, session IDs, or any internal identifiers in your question.\n"
     )
     #change3 Pass focused context, not the whole memory bundle
     context = render_memory_bundle(memory_bundle)
