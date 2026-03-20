@@ -42,14 +42,12 @@ def _norm_action(v: Any, status: str) -> str:
 def run(state: SessionState) -> Dict[str, Any]:
     current_claim = str(state.get("user_input", "")).strip()
     memory_bundle = state.get("memory_bundle")
-    #Fix: Design Issue 3: Unranked, undocumented claim truncation
     candidate_claims = list(getattr(memory_bundle, "episodic_claims", []) or [])
     candidate_claims = sorted(
         candidate_claims,
         key=lambda c: getattr(c, "turn_number", 0),
         reverse=True,
     )[:8]
-    # End Fix Design Issue 3
     common_ground = list(getattr(memory_bundle, "common_ground", []) or [])
     classification = state.get("classification")
 
@@ -75,7 +73,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         candidate_claims=candidate_claims,
         classification=classification,
         common_ground=common_ground,
-        max_candidates=len(candidate_claims), #Fix: Design Issue 3: Unranked, undocumented claim truncation
+        max_candidates=len(candidate_claims),
     )
 
     try:
@@ -86,7 +84,6 @@ def run(state: SessionState) -> Dict[str, Any]:
             options=opts_judge_or_classify(),
         )
     except Exception:
-        #Fix:Bug3:Silent exception swallowing
         logger.warning("Contradiction check failed; defaulting to no_conflict.", exc_info=True)
         return {
             "conflict_result": _default_conflict(
@@ -125,7 +122,14 @@ def run(state: SessionState) -> Dict[str, Any]:
         result.status.value, result.action.value, prior_claim_id, result.explanation,
     )
 
+    # Only propagate conflict_prior_claim_id for TRUE contradictions.
+    emit_prior_id = (
+        prior_claim_id
+        if isinstance(prior_claim_id, str) and status == "true_contradiction"
+        else None
+    )
+
     return {
         "conflict_result": result,
-        "conflict_prior_claim_id": prior_claim_id if isinstance(prior_claim_id, str) else None,
+        "conflict_prior_claim_id": emit_prior_id,
     }

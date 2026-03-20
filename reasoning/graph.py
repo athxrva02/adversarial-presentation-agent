@@ -280,7 +280,6 @@ class SessionRunner:
         if failed:
             failed_ids = [fid for fid, _ in failed]
             raise RuntimeError(f"Negotiation commit partial failure: {failed_ids}")
-        # End Fix Design Issue 4:Partial writes with no error signal
 
     def end_session(self) -> Any:
         """
