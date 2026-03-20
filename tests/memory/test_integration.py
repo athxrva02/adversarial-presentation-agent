@@ -89,13 +89,15 @@ FAKE_SUMMARY = {
 }
 
 FAKE_SCORE = {
-    "overall_score": 62,
     "rubric": {
-        "clarity_structure": 65,
-        "evidence_specificity": 55,
-        "definition_precision": 60,
-        "logical_coherence": 70,
-        "handling_adversarial_questions": 60,
+        "clarity_structure": {"reasoning": "Clear structure.", "score": 3},
+        "evidence_specificity": {"reasoning": "Some evidence.", "score": 3},
+        "definition_precision": {"reasoning": "Terms defined.", "score": 3},
+        "logical_coherence": {"reasoning": "Logical flow.", "score": 3},
+        "handling_adversarial_questions": {"reasoning": "Handled ok.", "score": 3},
+        "depth_of_understanding": {"reasoning": "Adequate depth.", "score": 3},
+        "concession_and_qualification": {"reasoning": "Some qualification.", "score": 3},
+        "recovery_from_challenge": {"reasoning": "Recovered.", "score": 3},
     },
     "notes": {
         "top_strengths": ["Clear research question."],
@@ -149,6 +151,7 @@ class TestPDFToSessionIntegration:
         runner = SessionRunner(session_id="integ-test-01")
 
         with patch("reasoning.nodes.classify.call_llm_structured", return_value=FAKE_CLASSIFICATION), \
+             patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user), \
              patch("reasoning.nodes.generate_question.call_llm_text", return_value=FAKE_QUESTION):
             question = runner.handle_user_input(
                 "Our model improves translation quality compared to the baseline."
@@ -188,6 +191,7 @@ class TestPDFToSessionIntegration:
         runner = SessionRunner(session_id="integ-test-02")
 
         with patch("reasoning.nodes.classify.call_llm_structured", return_value=FAKE_CLASSIFICATION), \
+             patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user), \
              patch("reasoning.nodes.generate_question.call_llm_text", return_value=FAKE_QUESTION):
             for i, turn_text in enumerate([
                 "The model is smaller after pruning.",
@@ -207,7 +211,7 @@ class TestPDFToSessionIntegration:
 
         assert session_record is not None
         assert session_record.session_id == "integ-test-02"
-        assert session_record.overall_score == 62.0
+        assert session_record.overall_score == 50.0
         assert session_record.claims_count == 3
         assert "Missing quantitative evidence" in session_record.weaknesses[0]
 
@@ -215,7 +219,7 @@ class TestPDFToSessionIntegration:
         rs.insert_session(session_record)
         row = rs.get_session("integ-test-02")
         assert row is not None
-        assert row["overall_score"] == 62.0
+        assert row["overall_score"] == 50.0
         assert row["claims_count"] == 3
 
     def test_document_retrieval_returns_relevant_chunks(self, tmp_path):
@@ -256,6 +260,7 @@ class TestPDFToSessionIntegration:
         runner = SessionRunner(session_id="integ-test-empty")
 
         with patch("reasoning.nodes.classify.call_llm_structured", return_value=FAKE_CLASSIFICATION), \
+             patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user), \
              patch("reasoning.nodes.generate_question.call_llm_text", return_value=FAKE_QUESTION):
             question = runner.handle_user_input("My research is about neural compression.")
 
@@ -321,6 +326,7 @@ class TestPDFToSessionIntegration:
         ]
 
         with patch("reasoning.nodes.classify.call_llm_structured", return_value=FAKE_CLASSIFICATION), \
+             patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user), \
              patch("reasoning.nodes.generate_question.call_llm_text", return_value=FAKE_QUESTION):
             for text in turns:
                 runner.handle_user_input(text)

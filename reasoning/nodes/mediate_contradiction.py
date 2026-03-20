@@ -23,10 +23,9 @@
 #         )
 #     return {"agent_response": q}
 
-# Fix:Design Issue 1:Hardcoded stub in the hot path
-# I replaced the hardcoded mediation templates with an LLM-driven contradiction question so this hot path is adaptive like the rest of the reasoning nodes. 
+# Replaced the hardcoded mediation templates with an LLM-driven contradiction question so this hot path is adaptive like the rest of the reasoning nodes. 
 # The node now uses prior_claim, current_claim, and explanation to build a focused prompt and generate one reconciliation question, then lightly sanitizes 
-# the output for UI safety. If the LLM call fails or returns empty text, it falls back to the previous deterministic template, so behavior stays robust while 
+# the output for UI safety. If the LLM call fails or returns empty text, it falls back to the previous deterministic template, so behaviour stays robust while 
 # removing the “canned response” design issue.
 from __future__ import annotations
 

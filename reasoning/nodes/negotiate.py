@@ -50,14 +50,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         cid = getattr(entry, "cg_id", None)
         if isinstance(cid, str) and cid:
             existing_by_id[cid] = entry
-
-    # Fix: Design Issue 2: claim_by_id silently overwrites episodic claims
-    # claims = list(state.get("claims", []) or [])
-    # claim_by_id: dict[str, Any] = {}
-    # for c in [*episodic_claims, *claims]:
-    #     cid = getattr(c, "claim_id", None)
-    #     if isinstance(cid, str) and cid:
-    #         claim_by_id[cid] = c
+            
     claims = list(state.get("claims", []) or [])
 
     episodic_by_id: dict[str, Any] = {}
@@ -71,7 +64,6 @@ def run(state: SessionState) -> Dict[str, Any]:
         cid = getattr(c, "claim_id", None)
         if isinstance(cid, str) and cid:
             session_by_id[cid] = c
-    # End Fix Design Issue 2
 
     # Hard gate: negotiation is only for contradiction resolution.
     contradiction_flag = False
@@ -80,12 +72,12 @@ def run(state: SessionState) -> Dict[str, Any]:
         contradiction_flag = True
     if any(str(getattr(c, "prior_conflict", "") or "").strip() for c in claims):
         contradiction_flag = True
-    #Fix:Bug4 Lost fallback for untracked contradictions
-    try:
-        contradiction_flag = contradiction_flag or int(getattr(summary, "contradictions_detected", 0) or 0) > 0
-    except Exception:
-        pass
-    #End Fix Bug 4
+    # Intentionally not using summary.contradictions_detected as a fallback gate.
+    # The summarise LLM sees the same over-fitted claims and would also over-count,
+    # causing Phase 6 to open for elaborations and refinements that are not true
+    # contradictions. Negotiation opens only when detect_contradiction flagged a
+    # TRUE_CONTRADICTION (sets conflict_result) or when a ClaimRecord was patched
+    # with prior_conflict (only done for true_contradiction, not needs_clarification).
     if not contradiction_flag:
         return {"phase": "negotiation", "negotiation_items": []}
 
@@ -96,7 +88,6 @@ def run(state: SessionState) -> Dict[str, Any]:
         conflict_text = str(getattr(conflict, "explanation", "") or "Contradiction detected.").strip()
         current_claim = str(getattr(conflict, "current_claim", "") or "").strip()
         prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
-        #Fix:Bug2: Empty-string dedup key collision
         if conflict_text and (current_claim or prior_claim):
             key = (current_claim, prior_claim)
             seen_pairs.add(key)
@@ -120,24 +111,54 @@ def run(state: SessionState) -> Dict[str, Any]:
                     past_claim=prior_claim,
                 )
             )
-        #End Fix Bug 2
 
     for c in claims:
         prior_id = str(getattr(c, "prior_conflict", "") or "").strip()
         if not prior_id:
             continue
         current_claim = str(getattr(c, "claim_text", "") or "").strip()
-         # Fix: Design Issue 2: claim_by_id silently overwrites episodic claims
         # prior_claim_obj = claim_by_id.get(prior_id)
         # prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
         prior_claim_obj = episodic_by_id.get(prior_id) or session_by_id.get(prior_id)
+
+        # Fallback: if the prior claim wasn't returned by the similarity search
+        # (episodic_by_id only contains whatever ChromaDB happened to surface for
+        # the current query), fetch it directly from SQLite by its exact ID.
+        if prior_claim_obj is None:
+            mm = state.get("_memory_module")
+            if mm is not None:
+                try:
+                    row = mm._rel.get_claim(prior_id)
+                    if row is not None:
+                        from storage.schemas import ClaimRecord
+                        from datetime import datetime
+                        prior_claim_obj = ClaimRecord(
+                            claim_id=row["claim_id"],
+                            session_id=row["session_id"],
+                            turn_number=int(row["turn_number"]),
+                            claim_text=row["claim_text"],
+                            alignment=row.get("alignment", "novel"),
+                            mapped_to_slide=row.get("mapped_to_slide"),
+                            prior_conflict=row.get("prior_conflict"),
+                            timestamp=row.get("timestamp", datetime.now()),
+                        )
+                except Exception:
+                    pass
+
         prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
-        # End Fix Design Issue 2
+
+        # Fallback: if the ID-based lookup failed, use the prior_claim text
+        # already stored on the conflict_result (detect_contradiction saves it).
+        if not prior_claim and conflict is not None:
+            prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
+
         key = (current_claim, prior_claim)
         if key in seen_pairs:
             continue
         seen_pairs.add(key)
-        explanation = "Current claim conflicts with a past claim."
+        explanation = str(getattr(conflict, "explanation", "") or "").strip() if conflict is not None else ""
+        if not explanation:
+            explanation = "Current claim conflicts with a past claim."
         proposed = f"Resolve contradiction between claims: {prior_id} and {getattr(c, 'claim_id', 'current')}"
         cg_id = _stable_cg_id(proposed)
         prior_entry = existing_by_id.get(cg_id)

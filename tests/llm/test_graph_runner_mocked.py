@@ -41,6 +41,7 @@ def test_session_runner_end_to_end_mocked():
     }
 
     with patch("reasoning.nodes.classify.call_llm_structured", return_value=fake_classification), \
+         patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user), \
          patch("reasoning.nodes.generate_question.call_llm_text", return_value="Which baseline and metric did you use?"), \
          patch("reasoning.nodes.summarise.call_llm_structured", return_value=fake_summary), \
          patch("reasoning.nodes.score.call_llm_structured", return_value=fake_score):
