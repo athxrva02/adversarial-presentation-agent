@@ -146,11 +146,19 @@ def run(state: SessionState) -> Dict[str, Any]:
                     pass
 
         prior_claim = str(getattr(prior_claim_obj, "claim_text", "") or "").strip()
+
+        # Fallback: if the ID-based lookup failed, use the prior_claim text
+        # already stored on the conflict_result (detect_contradiction saves it).
+        if not prior_claim and conflict is not None:
+            prior_claim = str(getattr(conflict, "prior_claim", "") or "").strip()
+
         key = (current_claim, prior_claim)
         if key in seen_pairs:
             continue
         seen_pairs.add(key)
-        explanation = "Current claim conflicts with a past claim."
+        explanation = str(getattr(conflict, "explanation", "") or "").strip() if conflict is not None else ""
+        if not explanation:
+            explanation = "Current claim conflicts with a past claim."
         proposed = f"Resolve contradiction between claims: {prior_id} and {getattr(c, 'claim_id', 'current')}"
         cg_id = _stable_cg_id(proposed)
         prior_entry = existing_by_id.get(cg_id)

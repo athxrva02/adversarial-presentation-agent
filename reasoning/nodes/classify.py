@@ -15,12 +15,16 @@ from datetime import datetime
 from typing import Dict, Any
 
 from reasoning.state import SessionState
-from reasoning.llm import call_llm_structured, opts_judge_or_classify
+from reasoning.llm import call_llm_structured, call_llm_text, opts_judge_or_classify, LLMOptions
 from reasoning.prompts.classification import build_classification_prompt
 from storage.schemas import Classification, ClaimRecord
 
 
 # Helpers
+
+import logging
+
+_logger = logging.getLogger(__name__)
 
 _VALID_RESPONSE_CLASS = {"strong", "weak", "contradiction", "evasion"}
 _VALID_ALIGNMENT = {"supported", "contradicted", "unsupported", "novel", "negotiated"}
@@ -86,6 +90,36 @@ def _normalize_classification(raw: dict) -> dict:
 
     return out
 
+def _clean_claim_text(utterance: str) -> str:
+    """
+    Fix grammar and spelling in user utterance before storing as a claim.
+
+    Uses a fast, low-token LLM call. On failure, returns the original text.
+    """
+    text = utterance.strip()
+    if not text or len(text) < 5:
+        return text
+    try:
+        result = call_llm_text(
+            system_prompt=(
+                "You are a grammar corrector. Fix grammar, spelling, and punctuation errors "
+                "in the user's text. Preserve the original meaning exactly. "
+                "Do NOT add information, change the meaning, or elaborate. "
+                "Output ONLY the corrected text, nothing else."
+            ),
+            user_prompt=text,
+            options=LLMOptions(temperature=0.0, num_predict=150, num_ctx=2048),
+        )
+        cleaned = result.strip()
+        # Sanity check: if the LLM returned something wildly different or empty, keep original
+        if not cleaned or len(cleaned) > len(text) * 3:
+            return text
+        return cleaned
+    except Exception:
+        _logger.debug("Grammar cleanup failed, using original text", exc_info=True)
+        return text
+
+
 def run(state: SessionState) -> Dict[str, Any]:
     """
     Classify the user's current input.
@@ -139,12 +173,13 @@ def run(state: SessionState) -> Dict[str, Any]:
 
     # Create claim record for this turn
     session_id = state.get("session_id", "unknown_session")
+    clean_text = _clean_claim_text(utterance)
 
     claim_record = ClaimRecord(
         claim_id=f"{session_id}-{state['turn_number']}",
         session_id=session_id,
         turn_number=state["turn_number"],
-        claim_text=utterance,
+        claim_text=clean_text,
         alignment=classification.alignment,
         mapped_to_slide=None,  # can be filled later by retrieval logic if needed
         prior_conflict=None,

@@ -12,7 +12,8 @@ def test_classify_node_with_mocked_llm(sample_classification_json):
         "memory_bundle": None,
     }
 
-    with patch("reasoning.nodes.classify.call_llm_structured", return_value=sample_classification_json):
+    with patch("reasoning.nodes.classify.call_llm_structured", return_value=sample_classification_json), \
+         patch("reasoning.nodes.classify.call_llm_text", side_effect=lambda _sys, user, **kw: user):
         result = run(state)
 
     assert "classification" in result

@@ -339,6 +339,9 @@ class TestSessionRunnerContradictionFlow:
             "reasoning.nodes.classify.call_llm_structured",
             return_value=FAKE_CLASSIFICATION_WEAK,
         ), patch(
+            "reasoning.nodes.classify.call_llm_text",
+            side_effect=lambda _sys, user, **kw: user,
+        ), patch(
             "reasoning.nodes.detect_contradiction.call_llm_structured",
             return_value={
                 "status": "no_conflict",
@@ -368,6 +371,9 @@ class TestSessionRunnerContradictionFlow:
         with patch(
             "reasoning.nodes.classify.call_llm_structured",
             return_value=FAKE_CLASSIFICATION_CONTRADICTION,
+        ), patch(
+            "reasoning.nodes.classify.call_llm_text",
+            side_effect=lambda _sys, user, **kw: user,
         ), patch(
             "reasoning.nodes.detect_contradiction.call_llm_structured",
             return_value={
@@ -416,6 +422,9 @@ class TestSessionRunnerContradictionFlow:
             "reasoning.nodes.classify.call_llm_structured",
             return_value=FAKE_CLASSIFICATION_WEAK,
         ), patch(
+            "reasoning.nodes.classify.call_llm_text",
+            side_effect=lambda _sys, user, **kw: user,
+        ), patch(
             "reasoning.nodes.detect_contradiction.call_llm_structured",
             return_value={
                 "status": "no_conflict",
@@ -435,6 +444,9 @@ class TestSessionRunnerContradictionFlow:
         with patch(
             "reasoning.nodes.classify.call_llm_structured",
             return_value=FAKE_CLASSIFICATION_CONTRADICTION,
+        ), patch(
+            "reasoning.nodes.classify.call_llm_text",
+            side_effect=lambda _sys, user, **kw: user,
         ), patch(
             "reasoning.nodes.detect_contradiction.call_llm_structured",
             return_value={
