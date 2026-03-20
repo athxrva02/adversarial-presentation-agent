@@ -51,17 +51,12 @@ def run(state: SessionState) -> Dict[str, Any]:
     strengths = list(raw.get("strengths") or []) if isinstance(raw, dict) else []
     weaknesses = list(raw.get("weaknesses") or []) if isinstance(raw, dict) else []
 
-    cd_raw = raw.get("contradictions_detected") if isinstance(raw, dict) else 0
-    if cd_raw is None:
-        contradictions_detected = 0
-    elif isinstance(cd_raw, bool):
-        # Avoid True/False becoming 1/0 accidentally
-        contradictions_detected = 0
-    else:
-        try:
-            contradictions_detected = int(cd_raw)
-        except (TypeError, ValueError):
-            contradictions_detected = 0
+    # Count contradictions from actual claim records (prior_conflict set),
+    # not from LLM output which is unreliable.
+    contradictions_detected = sum(
+        1 for c in claims
+        if str(getattr(c, "prior_conflict", "") or "").strip()
+    )
 
     session_id = state.get("session_id", "unknown_session")
     duration_seconds = float(state.get("duration_seconds", 0.0))  # optional field

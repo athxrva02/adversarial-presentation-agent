@@ -48,7 +48,7 @@ def _write_summary(state: dict[str, Any], pdf_path: str, run_dir: str) -> None:
     negotiation_items = state.get("negotiation_items") or []
     negotiation_decisions = state.get("negotiation_decisions") or []
 
-    rubric: dict[str, Any] = breakdown.get("rubric") or {}
+    rubric: dict[str, Any] = breakdown.get("rubric_scores") or {}
     notes: dict[str, Any] = breakdown.get("notes") or {}
 
     # Count negotiation outcomes

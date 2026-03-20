@@ -5,6 +5,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 from reasoning.nodes.score import run
+from reasoning.prompts.scoring import RUBRIC_WEIGHTS
 from storage.schemas import SessionRecord
 
 
@@ -56,5 +57,11 @@ def test_score_node_live(live_enabled):
     assert 0.0 <= float(scored.overall_score) <= 100.0
 
     bd = result.get("score_breakdown", {})
-    assert "rubric" in bd
+    assert "rubric_scores" in bd
+    assert "rubric_reasoning" in bd
     assert "notes" in bd
+
+    # All 8 dimensions should have scores in 1-5
+    for dim in RUBRIC_WEIGHTS:
+        assert dim in bd["rubric_scores"], f"Missing dimension: {dim}"
+        assert 1 <= bd["rubric_scores"][dim] <= 5, f"{dim} score out of range: {bd['rubric_scores'][dim]}"
