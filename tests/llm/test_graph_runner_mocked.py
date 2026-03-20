@@ -53,5 +53,5 @@ def test_session_runner_end_to_end_mocked():
         assert session_record.overall_score == 70.0
         assert session_record.claims_count >= 1  # classify node appends a ClaimRecord
 
-        # turn history should contain user + assistant
+        # turn history should contain user + agent
         assert len(r.state["turns"]) >= 2

@@ -17,11 +17,7 @@ This module is UI-independent — demo.py calls run_session() directly.
 from __future__ import annotations
 
 import os
-import sys
-import tempfile
 import logging
-import threading
-from datetime import datetime
 from config import settings as _settings
 
 logger = logging.getLogger(__name__)
@@ -288,7 +284,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
         )
         if result == "/end":
             print(DIM + "Session cancelled." + RESET)
-            return
+            return None
         if result == "/reset":
             _info("Reset requested. Clearing all memory for a new user.")
             _clear_demo_storage(vs, rs)
@@ -342,7 +338,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
         except EOFError:
             return False
         return reply in {"yes", "y"}
-    
+
     def _confirm_early_reset() -> bool:
         """Ask the user to confirm they want to reset the agent. Returns True = reset."""
         print()
@@ -383,12 +379,14 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
                     return "RESET"
                 else:
                     _info("Continuing Q&A.")
-                    result = None
                     continue
 
             answer = result
+            if result == "/end":
+                break
 
-        if result == "/end":
+        # If the user chose /end, break out of the outer loop too
+        if answer is None or answer == "/end":
             break
 
         # Hard stop: max answers received — exit without generating another question
@@ -397,7 +395,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _info(f"Maximum of {max_answers} answers reached. Ending session.")
             break
 
-        # NOTE: If we can /end while LLM is thinking, we should also be able to /reset while it's thinking, to skip straight to a new user without waiting for the current LLM turn to finish. 
+        # NOTE: If we can /end while LLM is thinking, we should also be able to /reset while it's thinking, to skip straight to a new user without waiting for the current LLM turn to finish.
         print(DIM + " Thinking…" + RESET, flush=True)
         question = runner.handle_user_input(answer)
 
@@ -422,7 +420,15 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _clear_demo_storage(vs, rs)
             return "RESET"
         raise
-  # ── Phase 6: Negotiation ──────────────────────────────────────────────────
+
+    # ── Export results to CSV ─────────────────────────────────────────────────
+    from export import export_session
+    results_dir = export_session(runner.state, pdf_path)
+    _ok(f"Results saved → {BOLD}{results_dir}/{RESET}")
+    return None
+
+
+# ── Phase 6: Negotiation ──────────────────────────────────────────────────
 def _run_negotiation_phase(runner, voice: bool) -> None:
     items = list(runner.state.get("negotiation_items") or [])
     if not items:
@@ -522,7 +528,7 @@ def _run_negotiation_phase(runner, voice: bool) -> None:
             if clarified == "/reset":
                 raise RuntimeError("RESET_REQUESTED")
             if clarified == "/end":
-                clarified = ""            
+                clarified = ""
             if clarified:
                 decisions.append(
                     {

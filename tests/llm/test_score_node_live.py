@@ -40,9 +40,9 @@ def test_score_node_live(live_enabled):
         "session_id": "live_sess",
         "session_summary": summary,
         "turns": [
-            {"role": "assistant", "content": "State your main contribution."},
+            {"role": "agent", "content": "State your main contribution."},
             {"role": "user", "content": "We improve accuracy by 15% compared to baseline."},
-            {"role": "assistant", "content": "Which baseline and what metric?"},
+            {"role": "agent", "content": "Which baseline and what metric?"},
             {"role": "user", "content": "Logistic regression baseline; accuracy on held-out test set."},
         ],
         "score_breakdown": {},

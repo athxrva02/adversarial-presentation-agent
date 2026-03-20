@@ -27,9 +27,9 @@ def test_summarise_node_live(live_enabled):
     state = {
         "session_id": "live_sess",
         "turns": [
-            {"role": "assistant", "content": "State your main contribution."},
+            {"role": "agent", "content": "State your main contribution."},
             {"role": "user", "content": "We improve accuracy by 15% compared to a baseline."},
-            {"role": "assistant", "content": "Which baseline and what metric?"},
+            {"role": "agent", "content": "Which baseline and what metric?"},
             {"role": "user", "content": "Logistic regression baseline; accuracy metric on held-out test set."},
         ],
         "claims": [],

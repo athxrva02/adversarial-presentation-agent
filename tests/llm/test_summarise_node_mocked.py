@@ -9,7 +9,7 @@ def test_summarise_node_mocked():
         "session_id": "s1",
         "turns": [
             {"role": "user", "content": "Our approach improves accuracy by 15%."},
-            {"role": "assistant", "content": "What baseline did you compare against?"},
+            {"role": "agent", "content": "What baseline did you compare against?"},
             {"role": "user", "content": "Baseline is logistic regression on the same dataset."},
         ],
         "claims": [],  # can be empty; node should still work

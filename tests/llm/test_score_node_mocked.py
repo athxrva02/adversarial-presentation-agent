@@ -22,9 +22,9 @@ def test_score_node_mocked():
         "session_id": "s1",
         "session_summary": summary,
         "turns": [
-            {"role": "assistant", "content": "What is your contribution?"},
+            {"role": "agent", "content": "What is your contribution?"},
             {"role": "user", "content": "We improve accuracy by 15%."},
-            {"role": "assistant", "content": "Compared to what baseline and which metric?"},
+            {"role": "agent", "content": "Compared to what baseline and which metric?"},
             {"role": "user", "content": "Logistic regression baseline; accuracy on test set."},
         ],
         "score_breakdown": {"overall_notes": "pre-existing notes"},

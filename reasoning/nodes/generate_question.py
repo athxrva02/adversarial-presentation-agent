@@ -48,14 +48,14 @@ def _clean_question(text: str) -> str:
 
     return first
 #Improving question generation change1: giving the agent context of the previous questions to make more sense of the answer
-def _get_previous_assistant_question(turns: list[dict[str, Any]]) -> str:
+def _get_previous_agent_question(turns: list[dict[str, Any]]) -> str:
     if not turns:
         return ""
 
     # Current state already contains the latest user turn.
-    # Walk backwards and find the most recent assistant turn before it.
+    # Walk backwards and find the most recent agent turn before it.
     for turn in reversed(turns[:-1]):
-        if str(turn.get("role", "")).strip().lower() == "assistant":
+        if str(turn.get("role", "")).strip().lower() == "agent":
             return str(turn.get("content", "")).strip()
     return ""
 #end of change1
@@ -92,7 +92,7 @@ def run(state: SessionState) -> Dict[str, Any]:
     conflict_result = state.get("conflict_result")
     #change1
     turns = list(state.get("turns", []) or [])
-    previous_question = _get_previous_assistant_question(turns)
+    previous_question = _get_previous_agent_question(turns)
     #end of change1
     focused_context = _build_focused_context(memory_bundle) #change3
 
