@@ -209,11 +209,16 @@ def _display_summary(runner, voice: bool) -> None:
         print(f"  Overall Score   : {col}{BOLD}{score:.0f}/100{RESET}  {col}{bar}{RESET}")
         print()
 
-    rubric = breakdown.get("rubric", {})
-    if rubric:
-        print(BOLD + "  RUBRIC" + RESET)
-        for dim, val in rubric.items():
-            print(f"    {dim:<35}: {val}")
+    rubric_scores = breakdown.get("rubric_scores", {})
+    rubric_reasoning = breakdown.get("rubric_reasoning", {})
+    if rubric_scores:
+        print(BOLD + "  RUBRIC (1-5 scale)" + RESET)
+        for dim, val in rubric_scores.items():
+            label = dim.replace("_", " ").title()
+            bar = "█" * val + "░" * (5 - val)
+            reasoning = rubric_reasoning.get(dim, "")
+            reason_str = f"  ({reasoning})" if reasoning else ""
+            print(f"    {label:<35}: {val}/5  {bar}{reason_str}")
         print()
 
     if rec.strengths:

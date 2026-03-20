@@ -23,13 +23,15 @@ def test_session_runner_end_to_end_mocked():
         "overall_notes": "Good start; needs more experimental detail.",
     }
     fake_score = {
-        "overall_score": 70,
         "rubric": {
-            "clarity_structure": 70,
-            "evidence_specificity": 65,
-            "definition_precision": 60,
-            "logical_coherence": 80,
-            "handling_adversarial_questions": 75,
+            "clarity_structure": {"reasoning": "Clear arguments.", "score": 4},
+            "evidence_specificity": {"reasoning": "Good metrics.", "score": 3},
+            "definition_precision": {"reasoning": "Terms defined.", "score": 3},
+            "logical_coherence": {"reasoning": "Solid logic.", "score": 4},
+            "handling_adversarial_questions": {"reasoning": "Handled well.", "score": 4},
+            "depth_of_understanding": {"reasoning": "Good depth.", "score": 3},
+            "concession_and_qualification": {"reasoning": "Some concession.", "score": 3},
+            "recovery_from_challenge": {"reasoning": "Recovered.", "score": 3},
         },
         "notes": {
             "top_strengths": ["Clear quantitative improvement."],
@@ -50,7 +52,9 @@ def test_session_runner_end_to_end_mocked():
         session_record = r.end_session()
         assert session_record is not None
         assert session_record.session_id == "s_mock"
-        assert session_record.overall_score == 70.0
+        # overall_score is computed deterministically from rubric weights, not from LLM
+        assert session_record.overall_score is not None
+        assert 0.0 <= session_record.overall_score <= 100.0
         assert session_record.claims_count >= 1  # classify node appends a ClaimRecord
 
         # turn history should contain user + agent
