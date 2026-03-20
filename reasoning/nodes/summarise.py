@@ -30,11 +30,13 @@ def run(state: SessionState) -> Dict[str, Any]:
     turns = state.get("turns", [])
     claims = state.get("claims", [])
     memory_bundle = state.get("memory_bundle")
-
+    voice_summary = state.get("voice_summary")
+    
     prompt = build_summarisation_prompt(
         turns=turns,
         claims=claims,
         memory_bundle=memory_bundle,
+        voice_summary=voice_summary,
     )
 
     try:
@@ -84,3 +86,22 @@ def run(state: SessionState) -> Dict[str, Any]:
         "session_summary": session_summary,
         "score_breakdown": score_breakdown,
     }
+
+def _render_voice_summary(voice_summary: Optional[dict[str, Any]]) -> str:
+    if not voice_summary:
+        return "VOICE_SUMMARY: (none)\n"
+
+    return (
+        "VOICE_SUMMARY:\n"
+        f"- delivery_voice_score: {voice_summary.get('delivery_voice_score')}\n"
+        f"- speaking_rate_wpm: {voice_summary.get('speaking_rate_wpm'):.1f}\n"
+        f"- articulation_rate_wpm: {voice_summary.get('articulation_rate_wpm'):.1f}\n"
+        f"- pause_count: {voice_summary.get('pause_count')}\n"
+        f"- long_pause_count: {voice_summary.get('long_pause_count')}\n"
+        f"- mean_pause_s: {voice_summary.get('mean_pause_s'):.2f}\n"
+        f"- silence_ratio: {voice_summary.get('silence_ratio'):.2f}\n"
+        f"- volume_mean_dbfs: {voice_summary.get('volume_mean_dbfs'):.1f}\n"
+        f"- volume_std_db: {voice_summary.get('volume_std_db'):.1f}\n"
+        f"- pitch_range_semitones: {voice_summary.get('pitch_range_semitones'):.1f}\n"
+        f"- delivery_feedback: {voice_summary.get('delivery_feedback', [])}\n"
+    )

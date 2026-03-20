@@ -36,7 +36,8 @@ SCORING_SCHEMA_HINT = """
     "handling_adversarial_questions": { "reasoning": string, "score": integer 1-5 },
     "depth_of_understanding": { "reasoning": string, "score": integer 1-5 },
     "concession_and_qualification": { "reasoning": string, "score": integer 1-5 },
-    "recovery_from_challenge": { "reasoning": string, "score": integer 1-5 }
+    "recovery_from_challenge": { "reasoning": string, "score": integer 1-5 },
+    "vocal delivery": number
   },
   "notes": {
     "top_strengths": [string],
@@ -183,10 +184,29 @@ def _render_turns(turns: Optional[list[dict[str, Any]]], *, max_items: int = 12,
     return "\n".join(lines) + "\n"
 
 
+def _render_voice_summary(voice_summary: Optional[dict[str, Any]]) -> str:
+    if not voice_summary:
+        return "VOICE_SUMMARY: (none)\n"
+
+    return (
+        "VOICE_SUMMARY:\n"
+        f"- delivery_voice_score: {voice_summary.get('delivery_voice_score')}\n"
+        f"- speaking_rate_wpm: {voice_summary.get('speaking_rate_wpm'):.1f}\n"
+        f"- articulation_rate_wpm: {voice_summary.get('articulation_rate_wpm'):.1f}\n"
+        f"- pause_count: {voice_summary.get('pause_count')}\n"
+        f"- long_pause_count: {voice_summary.get('long_pause_count')}\n"
+        f"- silence_ratio: {voice_summary.get('silence_ratio'):.2f}\n"
+        f"- pitch_range_semitones: {voice_summary.get('pitch_range_semitones'):.1f}\n"
+        f"- volume_std_db: {voice_summary.get('volume_std_db'):.1f}\n"
+        f"- delivery_feedback: {voice_summary.get('delivery_feedback', [])}\n"
+    )
+
+
 def build_scoring_prompt(
     *,
     session_summary: Optional[Any],
     turns: Optional[list[dict[str, Any]]] = None,
+    voice_summary: Optional[dict[str, Any]] = None,
 ) -> dict[str, str]:
     """
     Build system+user prompt for scoring.
@@ -202,6 +222,7 @@ def build_scoring_prompt(
 
     summary_block = _render_summary(session_summary)
     turns_block = _render_turns(turns)
+    voice_block = _render_voice_summary(voice_summary)
 
     user = (
         "Task: Score this adversarial presentation practice session.\n\n"
@@ -209,13 +230,17 @@ def build_scoring_prompt(
         "For each rubric dimension, write a short 'reasoning' sentence FIRST, then assign the integer score (1-5).\n\n"
         f"{RUBRIC_DIMENSIONS}\n"
         f"{FEW_SHOT_EXAMPLES}\n"
+        "- delivery_voice: pacing, pauses, vocal variation, and speaking delivery based only on VOICE_SUMMARY if provided\n"
+        "- If VOICE_SUMMARY is missing, score delivery_voice conservatively or omit strong claims about delivery.\n"
+        "overall_score guidance:\n"
         "Constraints:\n"
-        "- Base scores ONLY on the provided session summary and turn evidence.\n"
+        "- Base scores ONLY on the provided session summary, turn evidence, and VOICE_SUMMARY if present.\n"
         "- If evidence is insufficient for a dimension, score it lower rather than guessing.\n"
         "- Provide short, actionable notes.\n"
         "- Weigh ALL turns equally — do not favour recent turns over earlier ones.\n\n"
         f"{summary_block}\n"
         f"{turns_block}\n"
+        f"{voice_block}\n"
         "Return ONLY the JSON object."
     )
 

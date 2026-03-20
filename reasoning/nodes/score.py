@@ -73,13 +73,14 @@ def compute_overall_score(rubric: dict[str, Any]) -> float:
 def run(state: SessionState) -> Dict[str, Any]:
     session_summary = state.get("session_summary")
     turns = state.get("turns", [])
-
+    voice_summary = state.get("voice_summary")
     if session_summary is None:
         raise ValueError("score node requires state['session_summary'] to be set (run summarise first).")
 
     prompt = build_scoring_prompt(
         session_summary=session_summary,
         turns=turns,
+        voice_summary=voice_summary,
     )
 
     try:
@@ -123,6 +124,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         "rubric_reasoning": rubric_reasoning,
         "rubric_weights": dict(RUBRIC_WEIGHTS),
         "notes": notes,
+        "voice_summary": voice_summary or {},
     }
 
     return {

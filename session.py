@@ -68,14 +68,14 @@ def _transcribe_wav(wav_path: str) -> str:
     except Exception as e:
         logger.error("Transcription failed: %s", e)
         return ""
-    finally:
-        try:
-            os.unlink(wav_path)
-        except OSError:
-            pass
+    # finally:
+    #     try:
+    #         os.unlink(wav_path)
+    #     except OSError:
+    #         pass
 
 
-def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -> str | None:
+def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -> str | dict[str, object] | None:
     """
     Capture one user utterance.
     voice=True  → record from microphone, transcribe with Whisper.
@@ -126,14 +126,39 @@ def _record_speech(prompt_line: str, label: str = "voice", voice: bool = True) -
 
     print(DIM + f"  Transcribing…{duration_hint}" + RESET, flush=True)
     transcript = _transcribe_wav(wav_path)
+    voice_metrics = None
 
-    if not transcript:
-        _warn("No speech detected. Please try again.")
-        return None
+    try:
+        if not transcript:
+            _warn("No speech detected. Please try again.")
+            return None
 
-    _user_label(label)
-    print(transcript)
-    return transcript
+        if voice and _settings.enable_voice_analysis:
+            try:
+                from interaction.voice_analysis import analyse_wav
+
+                voice_metrics = analyse_wav(
+                    wav_path,
+                    transcript=transcript,
+                    pause_min_s=_settings.voice_pause_min_s,
+                    long_pause_s=_settings.voice_long_pause_s,
+                    silence_dbfs_threshold=_settings.voice_silence_dbfs_threshold,
+                )
+            except Exception as e:
+                logger.warning("Voice analysis failed: %s", e)
+
+        _user_label(label)
+        print(transcript)
+        return {
+            "text": transcript,
+            "voice_metrics": voice_metrics,
+        }
+    finally:
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            logger.warning("Failed to delete WAV file: %s", wav_path)
+
 
 
 # ── Storage setup ─────────────────────────────────────────────────────────────
@@ -246,6 +271,29 @@ def _display_summary(runner, voice: bool) -> None:
 
     _hr("═")
 
+    voice_summary = breakdown.get("voice_summary") or {}
+    if not voice:
+        print(BOLD + "  DELIVERY / VOICE" + RESET)
+        print("    Voice analysis is only available for voice mode.")
+        print()
+    elif voice_summary:
+        print(BOLD + "  DELIVERY / VOICE" + RESET)
+        print(f"    voice score              : {voice_summary.get('delivery_voice_score')}")
+        print(f"    speaking rate (wpm)      : {voice_summary.get('speaking_rate_wpm'):.1f}")
+        print(f"    articulation rate (wpm)  : {voice_summary.get('articulation_rate_wpm'):.1f}")
+        print(f"    long pauses              : {voice_summary.get('long_pause_count')}")
+        print(f"    silence ratio            : {voice_summary.get('silence_ratio'):.2f}")
+        print(f"    pitch range (semitones)  : {voice_summary.get('pitch_range_semitones'):.1f}")
+        print(f"    volume variation (dB)    : {voice_summary.get('volume_std_db'):.1f}")
+        print()
+
+        feedback = voice_summary.get("delivery_feedback") or []
+        if feedback:
+            print(BOLD + "  VOICE FEEDBACK" + RESET)
+            for item in feedback:
+                print(f"    - {item}")
+            print()
+
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -263,6 +311,7 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
     """
     os.makedirs(demo_dir, exist_ok=True)
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    voice_turns: list[dict[str, object]] = []
 
     # ── Phase 1: Ingest PDF ───────────────────────────────────────────────────
     _section("Phase 1 — Processing PDF")
@@ -294,7 +343,21 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
             _info("Reset requested. Clearing all memory for a new user.")
             _clear_demo_storage(vs, rs)
             return "RESET"
-        presentation_transcript = result
+        # presentation_transcript = result
+
+        if result is None:
+            continue
+
+        if isinstance(result, dict):
+            presentation_transcript = str(result.get("text", "")).strip() or None
+            voice_metrics = result.get("voice_metrics")
+            if voice and voice_metrics:
+                voice_turns.append({
+                "label": "presentation",
+                **voice_metrics,
+            })
+        else:
+            presentation_transcript = str(result).strip() or None
 
     _info(f"Presentation captured ({len(presentation_transcript.split())} words)")
 
@@ -386,7 +449,22 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
                     _info("Continuing Q&A.")
                     continue
 
-            answer = result
+            if result is None:
+                continue
+
+            if isinstance(result, dict):
+                answer = str(result.get("text", "")).strip() or None
+                voice_metrics = result.get("voice_metrics")
+                if voice and voice_metrics:
+                    voice_turns.append({
+                "label": "answer",
+                "turn_index": answered_count + 1,
+                **voice_metrics,
+            })
+            else:
+                answer = str(result).strip() or None
+
+            # answer = result
             if result == "/end":
                 break
 
@@ -415,6 +493,15 @@ def run_session(pdf_path: str, demo_dir: str, *, voice: bool = True, debug: bool
     # ── Phase 5: End session ──────────────────────────────────────────────────
     _section("Phase 5 — Scoring")
     print(DIM + "  Analysing session…" + RESET, flush=True)
+    if voice and voice_turns and _settings.enable_voice_analysis:
+        try:
+            from interaction.voice_analysis import aggregate_voice_metrics
+
+            runner.state["voice_turn_metrics"] = voice_turns
+            runner.state["voice_summary"] = aggregate_voice_metrics(voice_turns)
+        except Exception as exc:
+            logger.warning("Voice summary aggregation failed: %s", exc)
+
     runner.end_session()
     _display_summary(runner, voice)
     try:

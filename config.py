@@ -35,6 +35,12 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
+    # Voice Analysis
+    enable_voice_analysis: bool = True
+    voice_pause_min_s: float = 0.25
+    voice_long_pause_s: float = 1.0
+    voice_silence_dbfs_threshold: float = -38.0
+
 
 
 settings = Settings()
