@@ -37,7 +37,7 @@ SCORING_SCHEMA_HINT = """
     "depth_of_understanding": { "reasoning": string, "score": integer 1-5 },
     "concession_and_qualification": { "reasoning": string, "score": integer 1-5 },
     "recovery_from_challenge": { "reasoning": string, "score": integer 1-5 },
-    "vocal delivery": number
+    "vocal_delivery": { "reasoning": string, "score": integer 1-5 }
   },
   "notes": {
     "top_strengths": [string],
@@ -57,6 +57,7 @@ RUBRIC_WEIGHTS: dict[str, float] = {
     "depth_of_understanding": 0.12,
     "concession_and_qualification": 0.08,
     "recovery_from_challenge": 0.08,
+    "vocal_delivery": 0.08,
 }
 
 RUBRIC_DIMENSIONS = (
@@ -118,6 +119,15 @@ RUBRIC_DIMENSIONS = (
     "   3 = Partially recovers but does not fully address the issue\n"
     "   4 = Recovers well, provides additional evidence or reframes\n"
     "   5 = Turns challenges into strengths, provides compelling recovery\n"
+
+    "9. vocal_delivery — Spoken delivery quality based ONLY on VOICE_SUMMARY when available.\n"
+    "   Consider pace, long pauses, silence ratio, pitch variation, volume variation, and clipping.\n"
+    "   1 = Delivery seriously hurts comprehension: many long pauses, highly unstable pace, very flat or problematic voice\n"
+    "   2 = Noticeable delivery problems: frequent pauses, weak variation, distracting pacing issues\n"
+    "   3 = Adequate delivery: understandable, some hesitation or flatness, but not severely disruptive\n"
+    "   4 = Strong delivery: clear pace, controlled pauses, good vocal emphasis and variation\n"
+    "   5 = Excellent delivery: confident, well-paced, expressive, controlled, and highly effective\n\n"
+
 )
 
 FEW_SHOT_EXAMPLES = (
@@ -230,8 +240,9 @@ def build_scoring_prompt(
         "For each rubric dimension, write a short 'reasoning' sentence FIRST, then assign the integer score (1-5).\n\n"
         f"{RUBRIC_DIMENSIONS}\n"
         f"{FEW_SHOT_EXAMPLES}\n"
-        "- delivery_voice: pacing, pauses, vocal variation, and speaking delivery based only on VOICE_SUMMARY if provided\n"
-        "- If VOICE_SUMMARY is missing, score delivery_voice conservatively or omit strong claims about delivery.\n"
+        "- vocal_delivery: rate on the SAME 1-5 scale as the other rubrics, using only VOICE_SUMMARY if provided.\n"
+        "- If VOICE_SUMMARY is missing, assign vocal_delivery = 3 unless there is explicit delivery evidence elsewhere.\n"
+        "- Do NOT infer vocal delivery problems from transcript text alone.\n"
         "overall_score guidance:\n"
         "Constraints:\n"
         "- Base scores ONLY on the provided session summary, turn evidence, and VOICE_SUMMARY if present.\n"
