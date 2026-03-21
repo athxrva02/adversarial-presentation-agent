@@ -30,10 +30,8 @@ def build_question_generation_prompt(
     memory_bundle: Optional[Any] = None,
     classification: Optional[Any] = None,
     conflict_result: Optional[Any] = None,
-    #change2  Replace the broad strategy prompt with a forced “pick one issue” prompt
     previous_question: str = "",
     focused_context: str = "",
-    #end of change2
 ) -> dict[str, str]:
     """
     Build system+user prompt for adversarial question generation.
@@ -53,10 +51,8 @@ def build_question_generation_prompt(
           "The question must be concrete, specific and test understanding.\n" #change2:added "concrete"
           "Do not include chunk IDs, claim IDs, session IDs, or any internal identifiers in your question.\n"
     )
-    #change3 Pass focused context, not the whole memory bundle
-    context = render_memory_bundle(memory_bundle)
-    focused_context = render_memory_bundle(memory_bundle)
-    #end of change3
+    if not focused_context:
+        focused_context = render_memory_bundle(memory_bundle)
     conflict_block = ""
     if conflict_result is not None:
         conflict_block = (

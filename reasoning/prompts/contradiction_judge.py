@@ -20,6 +20,63 @@ CONTRADICTION_SCHEMA_HINT = """
 }
 """.strip()
 
+CONTRADICTION_FEW_SHOTS = """
+Examples:
+
+Example 1:
+PRIOR_CLAIMS:
+- [p1] session=s1 turn=1 alignment=novel
+  We use SAGA in the optimizer.
+
+USER_INPUT:
+We do not use SAGA in this system.
+
+JSON:
+{
+  "status": "true_contradiction",
+  "action": "update",
+  "current_claim": "We do not use SAGA in this system.",
+  "prior_claim": "We use SAGA in the optimizer.",
+  "prior_claim_id": "p1",
+  "explanation": "The current claim directly negates the prior claim."
+}
+
+Example 2:
+PRIOR_CLAIMS:
+- [p1] session=s1 turn=1 alignment=novel
+  Our model is fast.
+
+USER_INPUT:
+Our model runs in under 50 ms on CPU.
+
+JSON:
+{
+  "status": "no_conflict",
+  "action": "ignore",
+  "current_claim": "Our model runs in under 50 ms on CPU.",
+  "prior_claim": null,
+  "prior_claim_id": null,
+  "explanation": "The current claim adds detail and does not contradict the prior claim."
+}
+
+Example 3:
+PRIOR_CLAIMS:
+- [p1] session=s1 turn=1 alignment=novel
+  The method works well for small datasets.
+
+USER_INPUT:
+The method may fail on very small datasets.
+
+JSON:
+{
+  "status": "needs_clarification",
+  "action": "clarify",
+  "current_claim": "The method may fail on very small datasets.",
+  "prior_claim": "The method works well for small datasets.",
+  "prior_claim_id": "p1",
+  "explanation": "The claims appear in tension but may be reconcilable depending on what counts as small."
+}
+""".strip()
 
 def build_contradiction_judge_prompt(
     *,
@@ -64,6 +121,7 @@ def build_contradiction_judge_prompt(
         "- If you select prior_claim_id, it must exist in PRIOR_CLAIMS.\n"
         "- Keep explanation <= 2 sentences.\n"
         "- If no single prior claim is a clear logical inverse of the current claim, output no_conflict.\n\n"
+        f"{CONTRADICTION_FEW_SHOTS}\n\n"
         f"{claims_block}\n"
         f"{cg_block}\n"
         f"{cls_block}"

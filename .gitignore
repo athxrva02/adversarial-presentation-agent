@@ -22,3 +22,5 @@ data/chroma/
 /tmp/
 .pytest_tmp/
 .tmp/
+
+results/
