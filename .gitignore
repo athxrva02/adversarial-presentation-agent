@@ -23,3 +23,5 @@ results/
 /tmp/
 .pytest_tmp/
 .tmp/
+
+results/

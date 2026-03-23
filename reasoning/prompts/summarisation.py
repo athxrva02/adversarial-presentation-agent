@@ -32,6 +32,26 @@ SUMMARISATION_SCHEMA_HINT = """
 }
 """.strip()
 
+SUMMARISATION_ONE_SHOT = """
+Example:
+TURNS:
+- user: We improved F1-score by 10% on the benchmark.
+- assistant: Compared to what baseline?
+- user: Compared to logistic regression, but I do not remember the exact baseline value.
+
+CLAIMS:
+- [sess_x-1] alignment=unsupported: We improved F1-score by 10% on the benchmark.
+
+JSON:
+{
+  "strengths": ["States the main performance claim clearly"],
+  "weaknesses": ["Does not provide the baseline value when challenged"],
+  "key_claims": ["The system improved F1-score by 10% over a baseline"],
+  "open_issues": ["What exact baseline score was used?"],
+  "contradictions_detected": 0,
+  "overall_notes": "The user presents the main claim clearly but lacks supporting detail when probed. Future practice should focus on baselines and quantitative grounding."
+}
+""".strip()
 
 def _render_turns(turns: Optional[list[dict[str, Any]]], *, max_items: int = 16, max_chars: int = 280) -> str:
     """
@@ -130,6 +150,7 @@ def build_summarisation_prompt(
         "- Do NOT invent new facts beyond the turns/claims provided.\n"
         "- Use VOICE_SUMMARY only if it is present; otherwise do not infer delivery issues from text alone.\n"
         "- Prefer concrete phrasing (e.g., 'Define X precisely', 'Provide evidence for Y') over generic advice.\n\n"
+        f"{SUMMARISATION_ONE_SHOT}\n\n"
         f"{context}\n"
         f"{voice_block}\n"
         f"{turns_block}\n"
