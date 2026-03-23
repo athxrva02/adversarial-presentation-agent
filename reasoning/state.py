@@ -70,3 +70,8 @@ class SessionState(TypedDict, total=False):
 
     # Internal: injected MemoryModule reference (not serialised)
     _memory_module: Optional[Any]
+
+    #Voice Analysis
+    voice_turn_metrics: Annotated[list[dict[str, Any]], add]
+    voice_summary: Optional[dict[str, Any]]
+

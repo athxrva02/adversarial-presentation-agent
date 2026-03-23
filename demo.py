@@ -19,11 +19,23 @@ from storage.vector_store import VectorStore
 from storage.relational_store import RelationalStore
 from memory.module import MemoryModule
 
+import warnings
+warnings.filterwarnings("ignore")
+
+import logging
+logging.disable(logging.CRITICAL)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Suppress ChromaDB telemetry — the capture() signature changed and it spams stderr
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 os.environ.setdefault("CHROMA_TELEMETRY", "False")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("DISABLE_TQDM", "1")
+
 
 RESET = "\033[0m"; BOLD = "\033[1m"; CYAN = "\033[96m"; RED = "\033[91m"; DIM = "\033[2m"
 

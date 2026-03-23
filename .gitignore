@@ -10,6 +10,7 @@ venv/
 
 data/db/
 data/chroma/
+results/
 
 .env
 

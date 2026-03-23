@@ -48,9 +48,9 @@ def _write_summary(state: dict[str, Any], pdf_path: str, run_dir: str) -> None:
     negotiation_items = state.get("negotiation_items") or []
     negotiation_decisions = state.get("negotiation_decisions") or []
 
-    rubric: dict[str, Any] = breakdown.get("rubric_scores") or {}
+    rubric: dict[str, Any] = breakdown.get("rubric") or breakdown.get("rubric_scores") or {}
     notes: dict[str, Any] = breakdown.get("notes") or {}
-
+    voice_summary: dict[str, Any] = breakdown.get("voice_summary") or {}
     # Count negotiation outcomes
     accepted = sum(
         1 for d in negotiation_decisions if d.get("decision") in {"accept", "update"}
@@ -74,6 +74,23 @@ def _write_summary(state: dict[str, Any], pdf_path: str, run_dir: str) -> None:
         "strengths": " | ".join(rec.strengths) if rec and rec.strengths else "",
         "weaknesses": " | ".join(rec.weaknesses) if rec and rec.weaknesses else "",
         "top_priority": notes.get("most_important_next_step", "") if isinstance(notes, dict) else "",
+
+        # Voice-analysis export
+        "voice_analysis_available": "yes" if voice_summary else "no",
+        "voice_delivery_score": voice_summary.get("delivery_voice_score", ""),
+        "voice_speaking_rate_wpm": voice_summary.get("speaking_rate_wpm", ""),
+        "voice_articulation_rate_wpm": voice_summary.get("articulation_rate_wpm", ""),
+        "voice_pause_count": voice_summary.get("pause_count", ""),
+        "voice_long_pause_count": voice_summary.get("long_pause_count", ""),
+        "voice_mean_pause_s": voice_summary.get("mean_pause_s", ""),
+        "voice_silence_ratio": voice_summary.get("silence_ratio", ""),
+        "voice_pitch_mean_hz": voice_summary.get("pitch_mean_hz", ""),
+        "voice_pitch_std_hz": voice_summary.get("pitch_std_hz", ""),
+        "voice_pitch_range_semitones": voice_summary.get("pitch_range_semitones", ""),
+        "voice_volume_mean_dbfs": voice_summary.get("volume_mean_dbfs", ""),
+        "voice_volume_std_db": voice_summary.get("volume_std_db", ""),
+        "voice_clipping_ratio": voice_summary.get("clipping_ratio", ""),
+        "voice_feedback": " | ".join(voice_summary.get("delivery_feedback") or []),
     }
 
     # Flatten rubric dimensions

@@ -20,7 +20,7 @@ from typing import Any, Dict
 
 from reasoning.state import SessionState
 from reasoning.llm import call_llm_structured, opts_summarise_or_score
-from reasoning.prompts.scoring import build_scoring_prompt, SCORING_SCHEMA_HINT, RUBRIC_WEIGHTS
+from reasoning.prompts.scoring import build_scoring_prompt, SCORING_SCHEMA_HINT, RUBRIC_WEIGHTS, VOCAL_DELIVERY_WEIGHT
 from storage.schemas import SessionRecord
 
 
@@ -47,16 +47,25 @@ def _extract_dimension_reasoning(dim_value: Any) -> str:
     return ""
 
 
-def compute_overall_score(rubric: dict[str, Any]) -> float:
+def compute_overall_score(rubric: dict[str, Any],*, voice_available: bool) -> float:
     """
     Compute overall_score (0-100) deterministically from rubric dimension scores (1-5).
 
     Uses explicit weights from RUBRIC_WEIGHTS. Maps the weighted 1-5 average
     to a 0-100 scale: score_100 = (weighted_avg - 1) * 25.
     """
+    if voice_available:
+        content_scale = 1.0 - VOCAL_DELIVERY_WEIGHT
+        effective_weights = {
+            dim: weight * content_scale
+            for dim, weight in RUBRIC_WEIGHTS.items()
+        }
+        effective_weights["vocal_delivery"] = VOCAL_DELIVERY_WEIGHT
+    else:
+        effective_weights = dict(RUBRIC_WEIGHTS)
     weighted_sum = 0.0
     total_weight = 0.0
-    for dim, weight in RUBRIC_WEIGHTS.items():
+    for dim, weight in effective_weights.items():
         score = _extract_dimension_score(rubric.get(dim, 1))
         weighted_sum += score * weight
         total_weight += weight
@@ -73,13 +82,14 @@ def compute_overall_score(rubric: dict[str, Any]) -> float:
 def run(state: SessionState) -> Dict[str, Any]:
     session_summary = state.get("session_summary")
     turns = state.get("turns", [])
-
+    voice_summary = state.get("voice_summary")
     if session_summary is None:
         raise ValueError("score node requires state['session_summary'] to be set (run summarise first).")
 
     prompt = build_scoring_prompt(
         session_summary=session_summary,
         turns=turns,
+        voice_summary=voice_summary,
     )
 
     try:
@@ -97,7 +107,8 @@ def run(state: SessionState) -> Dict[str, Any]:
     notes = raw.get("notes", {}) if isinstance(raw, dict) else {}
 
     # Compute overall score deterministically from rubric weights
-    overall_score = compute_overall_score(rubric)
+    voice_available = bool(voice_summary)
+    overall_score = compute_overall_score(rubric, voice_available=voice_available)
 
     # Build a flattened rubric view with scores and reasoning separated
     rubric_scores = {}
@@ -105,6 +116,9 @@ def run(state: SessionState) -> Dict[str, Any]:
     for dim in RUBRIC_WEIGHTS:
         rubric_scores[dim] = _extract_dimension_score(rubric.get(dim, 1))
         rubric_reasoning[dim] = _extract_dimension_reasoning(rubric.get(dim, ""))
+    if voice_available:
+        rubric_scores["vocal_delivery"] = _extract_dimension_score(rubric.get("vocal_delivery", 1))
+        rubric_reasoning["vocal_delivery"] = _extract_dimension_reasoning(rubric.get("vocal_delivery", ""))
 
     # Update SessionRecord.overall_score (Pydantic model is immutable? default BaseModel is mutable)
     if isinstance(session_summary, SessionRecord):
@@ -123,6 +137,7 @@ def run(state: SessionState) -> Dict[str, Any]:
         "rubric_reasoning": rubric_reasoning,
         "rubric_weights": dict(RUBRIC_WEIGHTS),
         "notes": notes,
+        "voice_summary": voice_summary or {},
     }
 
     return {

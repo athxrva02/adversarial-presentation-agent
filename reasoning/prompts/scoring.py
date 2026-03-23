@@ -36,7 +36,8 @@ SCORING_SCHEMA_HINT = """
     "handling_adversarial_questions": { "reasoning": string, "score": integer 1-5 },
     "depth_of_understanding": { "reasoning": string, "score": integer 1-5 },
     "concession_and_qualification": { "reasoning": string, "score": integer 1-5 },
-    "recovery_from_challenge": { "reasoning": string, "score": integer 1-5 }
+    "recovery_from_challenge": { "reasoning": string, "score": integer 1-5 },
+    "vocal_delivery": { "reasoning": string, "score": integer 1-5 }
   },
   "notes": {
     "top_strengths": [string],
@@ -57,6 +58,8 @@ RUBRIC_WEIGHTS: dict[str, float] = {
     "concession_and_qualification": 0.08,
     "recovery_from_challenge": 0.08,
 }
+# Only applied when VOICE_SUMMARY is available.
+VOCAL_DELIVERY_WEIGHT: float = 0.08
 
 RUBRIC_DIMENSIONS = (
     "Scoring rubric — rate each dimension on a 1-5 integer scale.\n"
@@ -117,6 +120,17 @@ RUBRIC_DIMENSIONS = (
     "   3 = Partially recovers but does not fully address the issue\n"
     "   4 = Recovers well, provides additional evidence or reframes\n"
     "   5 = Turns challenges into strengths, provides compelling recovery\n"
+
+    "9. vocal_delivery — Spoken delivery quality based ONLY on VOICE_SUMMARY when available.\n"
+    "   Consider pace, long pauses, silence ratio, pitch variation, volume variation, and clipping.\n"
+    "   If VOICE_SUMMARY is missing, this dimension is not applicable for the session.\n"
+    "   1 = Delivery seriously hurts comprehension: many long pauses, highly unstable pace, very flat or problematic voice\n"
+    "   2 = Noticeable delivery problems: frequent pauses, weak variation, distracting pacing issues\n"
+    "   3 = Adequate delivery: understandable, some hesitation or flatness, but not severely disruptive\n"
+    "   4 = Strong delivery: clear pace, controlled pauses, good vocal emphasis and variation\n"
+    "   5 = Excellent delivery: confident, well-paced, expressive, controlled, and highly effective\n\n"
+
+
 )
 
 FEW_SHOT_EXAMPLES = (
@@ -183,10 +197,29 @@ def _render_turns(turns: Optional[list[dict[str, Any]]], *, max_items: int = 12,
     return "\n".join(lines) + "\n"
 
 
+def _render_voice_summary(voice_summary: Optional[dict[str, Any]]) -> str:
+    if not voice_summary:
+        return "VOICE_SUMMARY: (none)\n"
+
+    return (
+        "VOICE_SUMMARY:\n"
+        f"- delivery_voice_score: {voice_summary.get('delivery_voice_score')}\n"
+        f"- speaking_rate_wpm: {voice_summary.get('speaking_rate_wpm'):.1f}\n"
+        f"- articulation_rate_wpm: {voice_summary.get('articulation_rate_wpm'):.1f}\n"
+        f"- pause_count: {voice_summary.get('pause_count')}\n"
+        f"- long_pause_count: {voice_summary.get('long_pause_count')}\n"
+        f"- silence_ratio: {voice_summary.get('silence_ratio'):.2f}\n"
+        f"- pitch_range_semitones: {voice_summary.get('pitch_range_semitones'):.1f}\n"
+        f"- volume_std_db: {voice_summary.get('volume_std_db'):.1f}\n"
+        f"- delivery_feedback: {voice_summary.get('delivery_feedback', [])}\n"
+    )
+
+
 def build_scoring_prompt(
     *,
     session_summary: Optional[Any],
     turns: Optional[list[dict[str, Any]]] = None,
+    voice_summary: Optional[dict[str, Any]] = None,
 ) -> dict[str, str]:
     """
     Build system+user prompt for scoring.
@@ -202,6 +235,7 @@ def build_scoring_prompt(
 
     summary_block = _render_summary(session_summary)
     turns_block = _render_turns(turns)
+    voice_block = _render_voice_summary(voice_summary)
 
     user = (
         "Task: Score this adversarial presentation practice session.\n\n"
@@ -209,13 +243,19 @@ def build_scoring_prompt(
         "For each rubric dimension, write a short 'reasoning' sentence FIRST, then assign the integer score (1-5).\n\n"
         f"{RUBRIC_DIMENSIONS}\n"
         f"{FEW_SHOT_EXAMPLES}\n"
+        "- vocal_delivery: rate on the SAME 1-5 scale as the other rubrics, using only VOICE_SUMMARY if provided.\n"
+        "- If VOICE_SUMMARY is missing, treat vocal_delivery as not applicable for this session\n"
+        "- Do NOT infer vocal delivery problems from transcript text alone.\n"
+        "- In text-only sessions, score the content rubrics normally and do not provide a vocal_delivery score.\n"
+        "overall_score guidance:\n"
         "Constraints:\n"
-        "- Base scores ONLY on the provided session summary and turn evidence.\n"
+        "- Base scores ONLY on the provided session summary, turn evidence, and VOICE_SUMMARY if present.\n"
         "- If evidence is insufficient for a dimension, score it lower rather than guessing.\n"
         "- Provide short, actionable notes.\n"
         "- Weigh ALL turns equally — do not favour recent turns over earlier ones.\n\n"
         f"{summary_block}\n"
         f"{turns_block}\n"
+        f"{voice_block}\n"
         "Return ONLY the JSON object."
     )
 
