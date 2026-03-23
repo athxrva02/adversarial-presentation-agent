@@ -128,6 +128,10 @@ class SessionRunner:
 
             "_memory_module": memory_module,
             "conflict_prior_claim_id": None,
+
+            #Voice Analysis
+            "voice_turn_metrics": [],
+            "voice_summary": None,
         }
 
         self._started_at = datetime.now()

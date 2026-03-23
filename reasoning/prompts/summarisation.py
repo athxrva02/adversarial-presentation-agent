@@ -69,11 +69,32 @@ def _render_claims(claims: Optional[list[Any]], *, max_items: int = 12, max_char
     return "\n".join(lines) + "\n"
 
 
+def _render_voice_summary(voice_summary: Optional[dict[str, Any]]) -> str:
+    if not voice_summary:
+        return "VOICE_SUMMARY: (none)\n"
+
+    return (
+        "VOICE_SUMMARY:\n"
+        f"- delivery_voice_score: {voice_summary.get('delivery_voice_score')}\n"
+        f"- speaking_rate_wpm: {voice_summary.get('speaking_rate_wpm'):.1f}\n"
+        f"- articulation_rate_wpm: {voice_summary.get('articulation_rate_wpm'):.1f}\n"
+        f"- pause_count: {voice_summary.get('pause_count')}\n"
+        f"- long_pause_count: {voice_summary.get('long_pause_count')}\n"
+        f"- mean_pause_s: {voice_summary.get('mean_pause_s'):.2f}\n"
+        f"- silence_ratio: {voice_summary.get('silence_ratio'):.2f}\n"
+        f"- volume_mean_dbfs: {voice_summary.get('volume_mean_dbfs'):.1f}\n"
+        f"- volume_std_db: {voice_summary.get('volume_std_db'):.1f}\n"
+        f"- pitch_range_semitones: {voice_summary.get('pitch_range_semitones'):.1f}\n"
+        f"- delivery_feedback: {voice_summary.get('delivery_feedback', [])}\n"
+    )
+
+
 def build_summarisation_prompt(
     *,
     turns: Optional[list[dict[str, Any]]] = None,
     claims: Optional[list[Any]] = None,
     memory_bundle: Optional[Any] = None,
+    voice_summary: Optional[dict[str, Any]] = None,
 ) -> dict[str, str]:
     """
     Build system+user prompt for session summarisation.
@@ -92,22 +113,25 @@ def build_summarisation_prompt(
 
     turns_block = _render_turns(turns)
     claims_block = _render_claims(claims)
+    voice_block = _render_voice_summary(voice_summary)
 
     user = (
         "Task: Summarise this practice session for later coaching.\n\n"
         "You must return ONLY valid JSON matching the schema.\n"
         "Keep lists short and actionable.\n\n"
         "Definitions:\n"
-        "- strengths: what the user did well (argument clarity, evidence, structure, definitions, handling questions)\n"
-        "- weaknesses: what needs improvement (vagueness, missing evidence, unclear terms, logical gaps)\n"
+        "- strengths: what the user did well (argument clarity, evidence, structure, definitions, handling questions, and if available, vocal delivery)\n"
+        "- weaknesses: what needs improvement (vagueness, missing evidence, unclear terms, logical gaps, and if available, vocal delivery)\n"
         "- key_claims: the main substantive claims the user asserted (as short sentences)\n"
         "- open_issues: unanswered questions / missing evidence / unclear definitions that should be revisited\n"
         "- contradictions_detected: count of apparent contradictions mentioned/flagged during the session (0 if none)\n"
         "- overall_notes: 2-4 sentences overall evaluation for internal use\n\n"
         "Constraints:\n"
         "- Do NOT invent new facts beyond the turns/claims provided.\n"
+        "- Use VOICE_SUMMARY only if it is present; otherwise do not infer delivery issues from text alone.\n"
         "- Prefer concrete phrasing (e.g., 'Define X precisely', 'Provide evidence for Y') over generic advice.\n\n"
         f"{context}\n"
+        f"{voice_block}\n"
         f"{turns_block}\n"
         f"{claims_block}\n"
         "Return ONLY the JSON object."

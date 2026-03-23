@@ -10,6 +10,9 @@ PyMuPDF
 gradio
 sounddevice
 numpy
+librosa
+praat-parselmouth
+soundfile
 pydantic
 pydantic-settings
 pytest
