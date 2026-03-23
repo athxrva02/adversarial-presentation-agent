@@ -142,6 +142,10 @@ def aggregate_voice_metrics(turns: list[dict[str, Any]]) -> dict[str, Any]:
 
     long_pause_count = sum(int(t.get("long_pause_count", 0)) for t in turns)
     pause_count = sum(int(t.get("pause_count", 0)) for t in turns)
+    total_pause_time = sum(
+        float(t.get("mean_pause_s", 0.0)) * int(t.get("pause_count", 0))
+        for t in turns
+    )
 
     summary = {
         "turn_count": len(turns),
@@ -153,7 +157,7 @@ def aggregate_voice_metrics(turns: list[dict[str, Any]]) -> dict[str, Any]:
         "long_pause_count": long_pause_count,
         "speaking_rate_wpm": total_words / max(total_duration / 60.0, 1e-6),
         "articulation_rate_wpm": total_words / max(total_speech / 60.0, 1e-6),
-        "mean_pause_s": weighted_mean("mean_pause_s"),
+        "mean_pause_s": total_pause_time / max(pause_count, 1),
         "volume_mean_dbfs": weighted_mean("volume_mean_dbfs"),
         "volume_std_db": weighted_mean("volume_std_db"),
         "pitch_mean_hz": weighted_mean("pitch_mean_hz"),

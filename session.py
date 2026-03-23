@@ -244,6 +244,8 @@ def _display_summary(runner, voice: bool) -> None:
             reasoning = rubric_reasoning.get(dim, "")
             reason_str = f"  ({reasoning})" if reasoning else ""
             print(f"    {label:<35}: {val}/5  {bar}{reason_str}")
+        if not voice:
+            print(f"    {'Vocal Delivery':<35}: Available only in voice mode")
         print()
 
     if rec.strengths:
