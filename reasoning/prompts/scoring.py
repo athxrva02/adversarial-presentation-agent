@@ -250,7 +250,7 @@ def build_scoring_prompt(
         "overall_score guidance:\n"
         "Constraints:\n"
         "- Base scores ONLY on the provided session summary, turn evidence, and VOICE_SUMMARY if present.\n"
-        "- If evidence is insufficient for a dimension, score it lower rather than guessing.\n"
+        "- If evidence is insufficient for a dimension, default to 3 (adequate) rather than penalising unfairly.\n"
         "- Provide short, actionable notes.\n"
         "- Weigh ALL turns equally — do not favour recent turns over earlier ones.\n\n"
         f"{summary_block}\n"
