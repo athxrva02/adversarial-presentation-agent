@@ -117,7 +117,10 @@ def record(
 
     if prompt:
         print(prompt, flush=True)
-    cmd = input().strip().lower()
+    try:
+        cmd = input().strip().lower()
+    except EOFError:
+        return "/end"
     if cmd in {"/end", "end", "quit", "exit"}:
         return "/end"
     if cmd in {"/reset", "reset", "new", "new_user"}:
@@ -129,16 +132,24 @@ def record(
     stop_event = threading.Event()
 
     def _wait():
-        input()
-        stop_event.set()
+        try:
+            input()
+        except (EOFError, OSError):
+            pass
+        finally:
+            stop_event.set()
 
     t = threading.Thread(target=_wait, daemon=True)
     t.start()
 
-    with sd.InputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
-        while not stop_event.is_set():
-            chunk, _ = stream.read(int(sample_rate * 0.1))
-            chunks.append(chunk.copy())
+    try:
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+            while not stop_event.is_set():
+                chunk, _ = stream.read(int(sample_rate * 0.1))
+                chunks.append(chunk.copy())
+    except Exception as e:
+        logger.warning("Audio stream error during recording: %s", e)
+        stop_event.set()
 
     if not chunks:
         logger.warning("No audio captured.")
