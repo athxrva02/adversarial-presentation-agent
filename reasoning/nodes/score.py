@@ -74,8 +74,8 @@ def compute_overall_score(rubric: dict[str, Any],*, voice_available: bool) -> fl
         return 0.0
 
     weighted_avg = weighted_sum / total_weight  # 1.0 to 5.0
-    # Map 1-5 to 0-100: (avg - 1) * 25
-    score_100 = (weighted_avg - 1.0) * 25.0
+    # Map 1-5 to 0-100: avg * 20 (1→20, 3→60, 5→100, mirrors letter-grade scale)
+    score_100 = weighted_avg * 20.0
     return round(min(100.0, max(0.0, score_100)), 1)
 
 
