@@ -75,3 +75,6 @@ class SessionState(TypedDict, total=False):
     voice_turn_metrics: Annotated[list[dict[str, Any]], add]
     voice_summary: Optional[dict[str, Any]]
 
+    # Question diversity tracking: ordered list of strategy names used (oldest first)
+    used_question_strategies: Optional[list[str]]
+
