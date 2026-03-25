@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM = platform.system()  # "Darwin" | "Windows" | "Linux"
 
+# Module-level generation counter — incremented on every record() call.
+# _wait threads from stale calls check this before setting stop_event,
+# so leaked threads from earlier recordings cannot stop a new recording.
+_record_generation: list[int] = [0]
+
 
 def mic_available() -> bool:
     """Return True if recording dependencies are installed."""
@@ -131,13 +136,18 @@ def record(
     chunks: list = []
     stop_event = threading.Event()
 
+    _record_generation[0] += 1
+    my_generation = _record_generation[0]
+
     def _wait():
         try:
-            input()
+            import sys, os as _os
+            _os.read(sys.stdin.fileno(), 4096)   # consume the Enter (and any buffer)
         except (EOFError, OSError):
             pass
         finally:
-            stop_event.set()
+            if _record_generation[0] == my_generation:
+                stop_event.set()
 
     t = threading.Thread(target=_wait, daemon=True)
     t.start()
