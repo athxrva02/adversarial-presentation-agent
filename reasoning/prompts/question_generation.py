@@ -32,6 +32,7 @@ def build_question_generation_prompt(
     conflict_result: Optional[Any] = None,
     previous_question: str = "",
     focused_context: str = "",
+    forced_strategy: Optional[dict[str, str]] = None,
 ) -> dict[str, str]:
     """
     Build system+user prompt for adversarial question generation.
@@ -116,26 +117,32 @@ def build_question_generation_prompt(
     #     f"{safe_user_input_block(utterance)}\n"
     #     "Now output the single best follow-up question."
     # )
+    # Build the mandatory strategy block — placed first so Qwen sees it before any other instruction
+    if forced_strategy and (
+        conflict_result is None
+        or getattr(conflict_result, "status", None) != "true_contradiction"
+    ):
+        strategy_block = (
+            "MANDATORY QUESTION TYPE FOR THIS TURN:\n"
+            f"  Type: {forced_strategy['name']}\n"
+            f"  What to do: {forced_strategy['instruction']}\n"
+            f"  Example: \"{forced_strategy['example']}\"\n"
+            "You MUST ask a question of this type. Do NOT use a different type.\n\n"
+        )
+    else:
+        strategy_block = ""
+
     user = (
+    f"{strategy_block}"
     "Task: Ask exactly ONE adversarial follow-up question to the user's latest answer.\n\n"
-    "FIRST decide the single most important issue to attack:\n"
-    "- contradiction\n"
-    "- evasion\n"
-    "- missing evidence\n"
-    "- unclear definition\n"
-    "- unsupported metric\n"
-    "- weak causal reasoning\n"
-    "- boundary case / failure mode\n\n"
-    "Then ask ONE question targeting only that issue.\n\n"
-    "Priority rules:\n"
-    "1) If CONFLICT_SIGNAL.status is true_contradiction, ask a reconciliation question.\n"
-    "2) Else if the user did not answer the PREVIOUS_QUESTION directly, ask a redirect question.\n"
-    "3) Else attack the weakest specific claim in the answer.\n\n"
-    "Bad questions:\n"
+    "Priority overrides (check these first):\n"
+    "1) If CONFLICT_SIGNAL.status is true_contradiction, ask a reconciliation question instead.\n"
+    "2) If the user did not answer the PREVIOUS_QUESTION directly, redirect to the missed point.\n"
+    "3) Otherwise, follow the MANDATORY QUESTION TYPE above.\n\n"
+    "Bad questions (never use these):\n"
     "- Can you elaborate?\n"
     "- Could you explain more?\n"
     "- What do you mean?\n\n"
-    "Good questions force one missing detail, one reconciliation, one metric, or one failure mode.\n\n"
     "Constraints:\n"
     "- Ask exactly ONE question.\n"
     "- Keep it <= 2 sentences.\n"

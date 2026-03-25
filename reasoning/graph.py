@@ -132,6 +132,8 @@ class SessionRunner:
             #Voice Analysis
             "voice_turn_metrics": [],
             "voice_summary": None,
+
+            "used_question_strategies": [],
         }
 
         self._started_at = datetime.now()
@@ -337,5 +339,6 @@ class SessionRunner:
             "memory_mode": self.state.get("memory_mode", "hybrid"),
             "_memory_module": self._memory,
             "conflict_prior_claim_id": None,
+            "used_question_strategies": [],
         }
         self._started_at = datetime.now()
