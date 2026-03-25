@@ -51,3 +51,46 @@ def test_get_all(doc_mem):
     for i in range(3):
         doc_mem.store(_chunk(i))
     assert len(doc_mem.get_all()) == 3
+
+
+def test_list_chunks_for_questioning_diversifies_types(doc_mem):
+    doc_mem.store(
+        [
+            DocumentChunk(
+                chunk_id="def1",
+                slide_number=1,
+                chunk_type="definition",
+                text="Accessibility means reducing planning friction.",
+                position_in_pdf=0,
+            ),
+            DocumentChunk(
+                chunk_id="ev1",
+                slide_number=2,
+                chunk_type="evidence",
+                text="Survey data shows safety concerns dominate choice.",
+                position_in_pdf=10,
+            ),
+            DocumentChunk(
+                chunk_id="cl1",
+                slide_number=3,
+                chunk_type="claim",
+                text="TravelGo improves discovery for solo travelers.",
+                position_in_pdf=20,
+            ),
+        ]
+    )
+
+    results = doc_mem.list_chunks_for_questioning(limit=3)
+    chunk_types = [r.chunk_type for r in results]
+    assert len(results) == 3
+    assert "definition" in chunk_types
+    assert "evidence" in chunk_types
+
+
+def test_list_chunks_for_questioning_respects_exclusions(doc_mem):
+    for i in range(3):
+        doc_mem.store(_chunk(i))
+
+    results = doc_mem.list_chunks_for_questioning(limit=3, exclude_chunk_ids=["dc0"])
+    result_ids = {r.chunk_id for r in results}
+    assert "dc0" not in result_ids

@@ -45,4 +45,25 @@ def test_retrieve_passes_user_input_as_query():
     }
     run(state)
     call_args = mock_module.retrieve.call_args
-    assert call_args.kwargs["query"] == "Our baseline is ResNet-50."
+    query = call_args.kwargs["query"]
+    assert "LATEST_ANSWER: Our baseline is ResNet-50." in query
+
+
+def test_retrieve_builds_broader_query_from_turn_history():
+    mock_module = MagicMock()
+    mock_module.retrieve.return_value = _empty_bundle()
+
+    state = {
+        "user_input": "We improved adoption.",
+        "turns": [
+            {"role": "user", "content": "My presentation is about TravelGo and solo travel."},
+            {"role": "agent", "content": "What evidence supports the accessibility claim?"},
+        ],
+        "claims": [],
+        "_memory_module": mock_module,
+    }
+    run(state)
+    query = mock_module.retrieve.call_args.kwargs["query"]
+    assert "LATEST_ANSWER: We improved adoption." in query
+    assert "PREVIOUS_QUESTION: What evidence supports the accessibility claim?" in query
+    assert "PRESENTATION_CONTEXT: My presentation is about TravelGo and solo travel." in query

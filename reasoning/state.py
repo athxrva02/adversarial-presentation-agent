@@ -51,6 +51,12 @@ class SessionState(TypedDict, total=False):
     # Claim records appended per user turn (or per extracted claim if you later refine)
     claims: Annotated[list[ClaimRecord], add]
 
+    # Context expansion change: track document-driven questioning coverage and diversity
+    asked_document_chunk_ids: Annotated[list[str], add]
+    question_modes: Annotated[list[str], add]
+    question_focus_history: Annotated[list[str], add]
+    document_coverage_keys: Annotated[list[str], add]
+
     # Session-end artifacts
     session_summary: Optional[SessionRecord]
 

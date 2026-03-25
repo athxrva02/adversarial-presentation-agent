@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     voice_long_pause_s: float = 1.0
     voice_silence_dbfs_threshold: float = -38.0
 
+    retrieval_top_k: int = 8
+
 
 
 settings = Settings()

@@ -82,6 +82,18 @@ class MemoryModule:
             session_order=session_order,
         )
 
+    # Context expansion change: expose document-only candidates for document-driven questioning
+    def get_document_question_candidates(
+        self,
+        *,
+        limit: int = 6,
+        exclude_chunk_ids: list[str] | None = None,
+    ) -> list[DocumentChunk]:
+        return self._document.list_chunks_for_questioning(
+            limit=limit,
+            exclude_chunk_ids=exclude_chunk_ids,
+        )
+
     # ---- Storage ------------------------------------------------------------
 
     def store_document(self, chunk: DocumentChunk) -> None:

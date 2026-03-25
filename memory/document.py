@@ -141,6 +141,81 @@ class DocumentMemory:
 
         return chunks
 
+    # Context expansion change: expose document chunks for document-driven questioning
+    def list_chunks_for_questioning(
+        self,
+        limit: int = 6,
+        exclude_chunk_ids: Optional[list[str]] = None,
+    ) -> list[DocumentChunk]:
+        """
+        Return document chunks for question generation independent of similarity search.
+
+        Strategy:
+        - exclude chunks already used for document-driven questions
+        - diversify by chunk_type first
+        - then spread coverage across the PDF by position
+        """
+        exclude = set(exclude_chunk_ids or [])
+        rows = [
+            r for r in self._rs.get_all_chunks()
+            if r.get("chunk_id") not in exclude
+        ]
+        if not rows:
+            return []
+
+        chosen: list[dict] = []
+        chosen_ids: set[str] = set()
+
+        type_priority = ("definition", "evidence", "claim", "conclusion")
+        for chunk_type in type_priority:
+            for row in rows:
+                if str(row.get("chunk_type", "")).strip().lower() != chunk_type:
+                    continue
+                cid = str(row.get("chunk_id", "") or "")
+                if not cid or cid in chosen_ids:
+                    continue
+                chosen.append(row)
+                chosen_ids.add(cid)
+                break
+            if len(chosen) >= limit:
+                break
+
+        if len(chosen) < limit:
+            total = len(rows)
+            step = max(1, total // max(limit, 1))
+            for idx in range(0, total, step):
+                row = rows[idx]
+                cid = str(row.get("chunk_id", "") or "")
+                if not cid or cid in chosen_ids:
+                    continue
+                chosen.append(row)
+                chosen_ids.add(cid)
+                if len(chosen) >= limit:
+                    break
+
+        if len(chosen) < limit:
+            for row in rows:
+                cid = str(row.get("chunk_id", "") or "")
+                if not cid or cid in chosen_ids:
+                    continue
+                chosen.append(row)
+                chosen_ids.add(cid)
+                if len(chosen) >= limit:
+                    break
+
+        return [
+            DocumentChunk(
+                chunk_id=row["chunk_id"],
+                slide_number=row.get("slide_number"),
+                chunk_type=row.get("chunk_type", "claim"),
+                text=row.get("text", ""),
+                position_in_pdf=int(row.get("position_in_pdf", 0)),
+                embedding_id=row.get("embedding_id"),
+                source_file=row.get("source_file"),
+            )
+            for row in chosen
+        ]
+
     # ------------------------------------------------------------------
     # Maintenance
     # ------------------------------------------------------------------

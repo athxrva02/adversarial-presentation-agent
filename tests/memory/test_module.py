@@ -122,6 +122,31 @@ def test_retrieve_top_k(module):
     assert len(bundle.document_context) == 3
 
 
+def test_get_document_question_candidates(module):
+    module.store_document(
+        DocumentChunk(
+            chunk_id="dc_def",
+            slide_number=1,
+            chunk_type="definition",
+            text="Accessibility means reducing planning effort.",
+            position_in_pdf=0,
+        )
+    )
+    module.store_document(
+        DocumentChunk(
+            chunk_id="dc_evd",
+            slide_number=2,
+            chunk_type="evidence",
+            text="Survey evidence highlights safety concerns.",
+            position_in_pdf=10,
+        )
+    )
+
+    results = module.get_document_question_candidates(limit=2)
+    result_ids = {r.chunk_id for r in results}
+    assert result_ids == {"dc_def", "dc_evd"}
+
+
 def test_promote_patterns(module):
     for sid in ("s1", "s2"):
         module.store_session(

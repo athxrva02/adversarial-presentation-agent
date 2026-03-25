@@ -115,6 +115,11 @@ class SessionRunner:
 
             "turns": [],
             "claims": [],
+            # Context expansion change
+            "asked_document_chunk_ids": [],
+            "question_modes": [],
+            "question_focus_history": [],
+            "document_coverage_keys": [],
 
             "session_summary": None,
             "score_breakdown": {},
@@ -329,6 +334,11 @@ class SessionRunner:
             "conflict_result": None,
             "turns": [],
             "claims": [],
+            # Context expansion change
+            "asked_document_chunk_ids": [],
+            "question_modes": [],
+            "question_focus_history": [],
+            "document_coverage_keys": [],
             "session_summary": None,
             "score_breakdown": {},
             "negotiation_items": None,
