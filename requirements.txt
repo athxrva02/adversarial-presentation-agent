@@ -16,3 +16,11 @@ soundfile
 pydantic
 pydantic-settings
 pytest
+# analysis pipeline
+pandas
+scipy
+pingouin
+matplotlib
+seaborn
+nbformat
+nbconvert
