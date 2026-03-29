@@ -3,7 +3,7 @@
 ## Prerequisites
 
 ```bash
-pip install pandas scipy pingouin matplotlib seaborn nbformat nbconvert jupytext
+pip install pandas scipy ipykernel pingouin matplotlib seaborn nbformat nbconvert jupytext
 ```
 
 ## Directory Layout
