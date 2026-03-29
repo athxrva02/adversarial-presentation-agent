@@ -10,7 +10,7 @@
 # - `results/*/summary.csv` — one row per participant-session (exported by export.py)
 # - `survey.csv` — flat CSV with `participant_id`, `session`, `confidence_score`
 #
-# **Conversion to Jupyter:** `jupytext --to notebook analysis.py`
+# **Conversion to Jupyter:** `jupytext --to notebook analysis_nb.py`
 #
 # pip install pingouin scipy pandas numpy matplotlib seaborn jupytext
 

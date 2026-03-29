@@ -132,7 +132,7 @@ def synthetic_project(tmp_path: Path) -> Path:
         results/{timestamp}/
             summary.csv          (one per session, un-augmented)
         analysis.ipynb           (copied from real project)
-        analysis.py              (copied from real project)
+        analysis_nb.py           (copied from real project)
     """
     root = tmp_path
     analysis_dir = root / "analysis"
@@ -205,7 +205,7 @@ def synthetic_project(tmp_path: Path) -> Path:
 
     # --- Copy analysis.ipynb and analysis.py from real project ---
     real_root = Path(__file__).parent.parent.parent
-    for fname in ("analysis.ipynb", "analysis.py"):
+    for fname in ("analysis.ipynb", "analysis_nb.py"):
         src = real_root / fname
         if src.exists():
             shutil.copy(src, root / fname)

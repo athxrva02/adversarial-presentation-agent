@@ -17,8 +17,8 @@ project-root/
 ├── results/
 │   └── {YYYY-MM-DD_HH-MM-SS}/
 │       └── summary.csv                           # one dir per session
-├── analysis.py                                   # source (edit this, not the notebook)
-└── analysis.ipynb                                # generated from analysis.py
+├── analysis_nb.py                                # source (edit this, not the notebook)
+└── analysis.ipynb                                # generated from analysis_nb.py
 ```
 
 ## Steps
@@ -52,10 +52,10 @@ python analysis/pipeline.py --no-notebook
 
 ### 4. Regenerate the notebook after editing analysis logic
 
-`analysis.py` is the source of truth. After editing it, regenerate the notebook:
+`analysis_nb.py` is the source of truth. After editing it, regenerate the notebook:
 
 ```bash
-jupytext --to notebook analysis.py -o analysis.ipynb
+jupytext --to notebook analysis_nb.py -o analysis.ipynb
 ```
 
 ## Outputs
