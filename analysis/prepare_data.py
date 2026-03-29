@@ -208,8 +208,18 @@ def run(root: Path) -> dict:
     participants = pd.read_csv(analysis_dir / "participants.csv")
     print(f"Loaded {len(participants)} participants")
 
-    before_csv = next(analysis_dir.glob("Questionnaire Before*"))
-    after_csv = next(analysis_dir.glob("Questionnaire After*"))
+    before_csv = next(analysis_dir.glob("Questionnaire Before*"), None)
+    if before_csv is None:
+        raise FileNotFoundError(
+            f"No 'Questionnaire Before*' CSV found in {analysis_dir}. "
+            "Download the pre-interaction survey export and place it there."
+        )
+    after_csv = next(analysis_dir.glob("Questionnaire After*"), None)
+    if after_csv is None:
+        raise FileNotFoundError(
+            f"No 'Questionnaire After*' CSV found in {analysis_dir}. "
+            "Download the post-interaction survey export and place it there."
+        )
 
     augmented, skipped = augment_summary_csvs(participants, results_dir)
     print(f"Augmented {augmented} summary CSV(s).")
