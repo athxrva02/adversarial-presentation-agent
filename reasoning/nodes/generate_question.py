@@ -24,11 +24,6 @@ QUESTION_STRATEGIES = [
         "example": "What was the exact accuracy improvement, and on which test set?",
     },
     {
-        "name": "baseline_comparison",
-        "instruction": "Ask what baseline or alternative method the user is comparing against to justify their improvement claim.",
-        "example": "Compared to which baseline method did you measure that improvement?",
-    },
-    {
         "name": "definition_probe",
         "instruction": "Pick one key technical term the user used and ask for its precise definition or how it is operationalised/measured.",
         "example": "How exactly do you define 'robustness' in your evaluation?",
@@ -57,6 +52,11 @@ QUESTION_STRATEGIES = [
         "name": "implication",
         "instruction": "Ask about the practical consequence, real-world impact, or broader implication of a specific claim the user just made.",
         "example": "If your model achieves that accuracy, what does it mean for deployment in a real clinical setting?",
+    },
+    {
+        "name": "baseline_comparison",
+        "instruction": "Ask what baseline or alternative method the user is comparing against to justify their improvement claim.",
+        "example": "Compared to which baseline method did you measure that improvement?",
     },
 ]
 
