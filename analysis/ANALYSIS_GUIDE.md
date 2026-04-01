@@ -3,7 +3,7 @@
 ## Prerequisites
 
 ```bash
-pip install pandas scipy ipykernel pingouin matplotlib seaborn nbformat nbconvert jupytext
+pip install pandas openpyxl scipy pingouin matplotlib seaborn nbformat nbconvert jupytext ipykernel
 ```
 
 ## Directory Layout
@@ -11,73 +11,88 @@ pip install pandas scipy ipykernel pingouin matplotlib seaborn nbformat nbconver
 ```
 project-root/
 ├── analysis/
-│   ├── participants.csv                          # participant → session mapping
-│   ├── Questionnaire Before Interacting*.csv     # pre-interaction survey
-│   └── Questionnaire After Interacting*.csv      # post-interaction survey
+│   ├── participants.csv                                               # participant → session mapping
+│   ├── Questionnaire Before Interacting with Adversarial Presentation Agent(1-30).xlsx
+│   └── Questionnaire After Interacting with Adversarial Presentation Agent(1-30).xlsx
 ├── results/
 │   └── {YYYY-MM-DD_HH-MM-SS}/
-│       └── summary.csv                           # one dir per session
-├── analysis_nb.py                                # source (edit this, not the notebook)
-└── analysis.ipynb                                # generated from analysis_nb.py
+│       └── summary.csv                                               # one dir per session
+├── survey.csv                                                        # confidence scores (auto-generated)
+├── analysis_nb.py                                                    # source — edit this, not the notebook
+└── analysis_executed.ipynb                                           # generated from analysis_nb.py
 ```
 
-## Steps
+## Required Input Files
 
-### 1. Add a new participant
+| File | Required columns |
+|---|---|
+| `analysis/participants.csv` | `participant_id`, `name`, `survey_name_before`, `survey_name_after`, `session_dir_1`, `session_dir_2`, `condition` |
+| `results/{dir}/summary.csv` | `overall_score`, `contradictions_detected`, `memory_type` |
+| `survey.csv` | `participant_id`, `session`, `confidence_score` |
 
-Edit `analysis/participants.csv` and add a row:
+## Running the Pipeline
 
-| participant_id | name | survey_name_before | survey_name_after | session_dir_1 | session_dir_2 | condition |
-|---|---|---|---|---|---|---|
-| P09 | Name | Full Name as in survey | Full Name as in survey | 2026-XX-XX_HH-MM-SS | 2026-XX-XX_HH-MM-SS | memory **or** no-memory |
-
-### 2. Drop session directories into `results/`
-
-Copy the timestamped session folders (containing `summary.csv` and `turns.csv`) into `results/`.
-
-### 3. Run the pipeline
+### Option A — Automated (generates `survey.csv` from xlsx, then executes notebook)
 
 ```bash
 python analysis/pipeline.py
 ```
 
-This does two things in sequence:
-1. **Prepares data** — injects `participant_id`/`session` into each `results/*/summary.csv` and builds `survey.csv` from the questionnaires
-2. **Executes the notebook** — runs `analysis.ipynb` and writes `results_summary.csv`, `fig_line_plots.png`, `fig_box_plots.png`, and `analysis_executed.ipynb`
-
-To regenerate data only (skip notebook):
+Data prep only (skip notebook execution):
 ```bash
 python analysis/pipeline.py --no-notebook
 ```
 
-### 4. Regenerate the notebook after editing analysis logic
-
-`analysis_nb.py` is the source of truth. After editing it, regenerate the notebook:
+### Option B — Manual steps
 
 ```bash
-jupytext --to notebook analysis_nb.py -o analysis.ipynb
+# 1. Regenerate notebook from source
+jupytext --to notebook analysis_nb.py -o analysis_executed.ipynb
+
+# 2. Execute
+jupyter nbconvert --to notebook --execute analysis_executed.ipynb --inplace
 ```
+
+## Confidence Score Derivation (1–7 scale)
+
+| Session | Source | Method |
+|---|---|---|
+| 1 (baseline) | Before-survey: preparedness question | Map label → 7-point scale (see table below) |
+| 2 (post) | After-survey: all 13 Likert items | `score = mean(13 items)` — raw 1–7, no rescaling |
+
+**Session 1 label → score mapping:**
+
+| Label | Score |
+|---|---|
+| Very unprepared | 1 |
+| Not prepared | 2 |
+| Somewhat unprepared | 3 |
+| Neither prepared nor unprepared | 4 |
+| Somewhat prepared | 5 |
+| Very prepared | 7 |
+
+**Session 2 item coding:** Strongly Agree = 7, Agree = 6, Somewhat Agree = 5, Neutral = 4, Somewhat Disagree = 3, Disagree = 2, Strongly Disagree = 1
 
 ## Outputs
 
 | File | Contents |
 |---|---|
-| `survey.csv` | `participant_id, session, confidence_score` — auto-generated, do not edit |
-| `results_summary.csv` | ANOVA / non-parametric test results table |
-| `fig_line_plots.png` | Mean ± SE line plots for both DVs |
-| `fig_box_plots.png` | Distribution box plots by condition/session |
+| `survey.csv` | `participant_id, session, confidence_score` — overwritten by pipeline |
+| `results_summary.csv` | All statistical test results (H1, H2, H3, correlation) |
+| `fig_line_plots.png` | Mean ± SE line plots — composite score and confidence by condition/session |
+| `fig_box_plots.png` | Box plots for all 3 DVs by condition/session |
+| `fig_correlation.png` | Session-2 perception vs performance scatter + regression line |
 | `analysis_executed.ipynb` | Notebook with all cell outputs |
 
-## Confidence Score Derivation
+## Adding a New Participant
 
-| Session | Source | Method |
-|---|---|---|
-| 1 (baseline) | Before-survey: preparedness question | Label → 1–5 scale × 3 → range [3, 15] |
-| 2 (post) | After-survey: all 13 Likert items | Sum (range 13–91) rescaled linearly to [3, 15] |
+1. Append a row to `analysis/participants.csv`
+2. Drop the two session directories into `results/`
+3. Re-run the pipeline
 
 ## Tests
 
 ```bash
-pytest tests/analysis/               # all 32 tests including notebook execution
-pytest tests/analysis/ -m "not integration"   # fast unit tests only (~1s)
+pytest tests/analysis/                          # all tests including notebook execution
+pytest tests/analysis/ -m "not integration"    # fast unit tests only
 ```
