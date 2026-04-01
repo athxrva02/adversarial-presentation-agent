@@ -4,7 +4,7 @@
 # **Design:** 2×2 mixed design (between-subjects × within-subjects)
 # - Between-subjects: `condition` (memory / no-memory)
 # - Within-subjects: `session` (1, 2)
-# - DVs: composite performance score (0–100), perceived confidence score (3–15),
+# - DVs: composite performance score (0–100), perceived confidence score (1–7),
 #   contradictions detected (count)
 #
 # **Hypotheses tested:**
@@ -130,10 +130,10 @@ def validate_data(df: pd.DataFrame, label: str = "merged") -> None:
             issues.append(f"Expected {expected} participants in '{cond}', found {actual}")
 
     if "confidence_score" in df.columns:
-        bad_conf = df[~df["confidence_score"].between(3, 15)]
+        bad_conf = df[~df["confidence_score"].between(1, 7)]
         if not bad_conf.empty:
             issues.append(
-                f"{len(bad_conf)} confidence_score value(s) outside [3, 15]"
+                f"{len(bad_conf)} confidence_score value(s) outside [1, 7]"
             )
 
     if issues:
@@ -178,7 +178,7 @@ validate_data(df, label="merged dataset")
 # %%
 DVS = {
     "overall_score": "Composite Performance Score (0–100)",
-    "confidence_score": "Perceived Confidence Score (3–15)",
+    "confidence_score": "Perceived Confidence Score (1–7)",
     "contradictions_detected": "Contradictions Detected (count)",
 }
 
@@ -440,8 +440,8 @@ contra_results = run_mixed_anova(df, "contradictions_detected", DVS["contradicti
 # %% [markdown]
 # ## Section 5: H1 & H3 — Perceived Confidence / Agent Perception Score
 #
-# The confidence score (3–15) is derived from the post-session questionnaire (all 13
-# Likert items averaged and linearly scaled to 3–15). It serves two roles:
+# The confidence score (1–7) is derived from the post-session questionnaire (all 13
+# Likert items averaged on the natural 1–7 scale). It serves two roles:
 #
 # - **H1** (subjective performance / perceived preparedness): addressed by the
 #   **within-condition** Wilcoxon signed-rank tests — did participants report higher
@@ -459,7 +459,7 @@ conf_results = run_mixed_anova(df, "confidence_score", DVS["confidence_score"])
 #
 # To assess whether participants who perceived the agent more positively also performed
 # better, we compute the Spearman rank correlation between the session-2 confidence score
-# (agent perception proxy, H3) and the session-2 composite performance score.
+# (agent perception proxy, H3; scale 1–7) and the session-2 composite performance score.
 # Spearman's ρ is used because normality assumptions failed for both variables.
 
 # %%

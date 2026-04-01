@@ -14,9 +14,9 @@
 
 | # | Hypothesis | DV |
 |---|---|---|
-| H1 | Memory-enabled participants report higher perceived confidence after repeated practice | Perceived Confidence Score |
+| H1 | Memory-enabled participants report higher perceived confidence after repeated practice | Perceived Confidence Score (1–7) |
 | H2 | Memory-enabled participants produce fewer contradictions | Contradictions Detected |
-| H3 | Memory-enabled agent perceived as more helpful and asking more relevant questions | Perceived Confidence Score at Session 2 (between conditions) |
+| H3 | Memory-enabled agent perceived as more helpful and asking more relevant questions | Perceived Confidence Score at Session 2, 1–7 (between conditions) |
 
 ---
 
@@ -29,28 +29,29 @@ Automated rubric score exported per session by `export.py`. Combines:
 
 Source: `results/<session_dir>/summary.csv` → column `overall_score`
 
-### 2. Perceived Confidence Score (3–15)
-Derived from questionnaire responses. Measures perceived preparedness and agent perception.
+### 2. Perceived Confidence Score (1–7)
+Derived from questionnaire responses on a 7-point Likert scale. Measures perceived preparedness and agent perception.
 
-**Session 1 score** — mapped from the Before-interaction questionnaire "preparedness level" item (5-point ordinal scale):
+**Session 1 score** — mapped from the Before-interaction questionnaire "preparedness level" item onto the 7-point scale:
 
 | Response | Score |
 |---|---|
-| Very unprepared / Not prepared | 3 |
-| Somewhat unprepared | 6 |
-| Neither prepared nor unprepared | 9 |
-| Somewhat prepared | 12 |
-| Very prepared | 15 |
+| Very unprepared | 1 |
+| Not prepared | 2 |
+| Somewhat unprepared | 3 |
+| Neither prepared nor unprepared | 4 |
+| Somewhat prepared | 5 |
+| Very prepared | 7 |
 
-**Session 2 score** — computed from the 13-item After-interaction Likert questionnaire:
+**Session 2 score** — mean of the 13-item After-interaction Likert questionnaire (raw, no rescaling):
 
 ```
-score = (mean_of_13_items − 1) × 2 + 3
+score = mean_of_13_items
 ```
 
 where each item is coded: Strongly Agree = 7, Agree = 6, Somewhat Agree = 5, Neutral = 4, Somewhat Disagree = 3, Disagree = 2, Strongly Disagree = 1.
 
-This linearly maps the 1–7 mean onto the 3–15 scale.
+Both session scores are on the same 1–7 scale, allowing direct within-subjects comparison.
 
 Source: `survey.csv` → column `confidence_score`
 
@@ -105,17 +106,17 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
 | **H2** Contradictions | Between conditions — Session 2 | Mann-Whitney U | **0.0015** | **Yes** |
 | **H2** Contradictions | Within memory (S1→S2) | Wilcoxon | **0.030** | **Yes** |
 | **H2** Contradictions | Within no-memory (S1→S2) | Wilcoxon | 1.0 (all zero) | No |
-| **H1** Confidence | Between conditions — Session 1 | Mann-Whitney U | 0.458 | No |
+| **H1** Confidence | Between conditions — Session 1 | Mann-Whitney U | 0.483 | No |
 | **H3** Confidence | Between conditions — Session 2 | Mann-Whitney U | 0.129 | No |
 | **H1** Confidence | Within memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
-| **H1** Confidence | Within no-memory (S1→S2) | Wilcoxon | **0.0043** | **Yes** |
+| **H1** Confidence | Within no-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
 | **Corr.** Perception × Performance | Spearman ρ = 0.444 | Spearman | **0.014** | **Yes** |
 
 ### Interpretation
-- **H1 supported:** Perceived confidence increased significantly from session 1 to session 2 in both conditions. The improvement is not unique to the memory condition.
-- **H2 partially supported:** Memory-enabled participants had significantly fewer contradictions at session 2 (between-conditions, p = 0.0015) and reduced contradictions over sessions (within-memory Wilcoxon, p = 0.030). No-memory participants showed no within-session change.
+- **H1 supported:** Perceived confidence (1–7) increased significantly from session 1 to session 2 in both conditions (memory p = 0.0001, no-memory p = 0.0019). The improvement is not unique to the memory condition.
+- **H2 partially supported:** Memory-enabled participants had significantly fewer contradictions at session 2 (between-conditions, p = 0.0015) and reduced contradictions within the memory group over sessions (p = 0.030). No-memory participants showed no within-session change.
 - **H3 not supported:** No significant difference in overall agent perception between conditions at session 2 (p = 0.129).
-- **Correlation significant:** Agent perception score (session 2) positively correlates with composite performance (ρ = 0.44, p = 0.014) — participants who rated the agent more positively also performed better.
+- **Correlation significant:** Agent perception score (session 2, 1–7) positively correlates with composite performance (ρ = 0.44, p = 0.014) — participants who rated the agent more positively also performed better.
 
 ---
 
