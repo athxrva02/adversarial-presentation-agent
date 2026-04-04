@@ -14,9 +14,9 @@
 
 | # | Hypothesis | DV |
 |---|---|---|
-| H1 | Memory-enabled participants report higher perceived confidence after repeated practice | Perceived Confidence Score (1–7) |
+| H1 | Memory-enabled participants report higher perceived preparedness after repeated practice | Perceived Preparedness Score (1–7) |
 | H2 | Memory-enabled participants produce fewer contradictions | Contradictions Detected |
-| H3 | Memory-enabled agent perceived as more helpful and asking more relevant questions | Perceived Confidence Score at Session 2, 1–7 (between conditions) |
+| H3 | Memory-enabled agent perceived as more helpful and asking more relevant questions | Perceived Preparedness Score at Session 2, 1–7 (between conditions) |
 
 ---
 
@@ -29,7 +29,7 @@ Automated rubric score exported per session by `export.py`. Combines:
 
 Source: `results/<session_dir>/summary.csv` → column `overall_score`
 
-### 2. Perceived Confidence Score (1–7)
+### 2. Perceived Preparedness Score (1–7)
 Derived from questionnaire responses on a 7-point Likert scale. Measures perceived preparedness and agent perception.
 
 **Session 1 score** — mapped from the Before-interaction questionnaire "preparedness level" item onto the 7-point scale:
@@ -53,7 +53,7 @@ where each item is coded: Strongly Agree = 7, Agree = 6, Somewhat Agree = 5, Neu
 
 Both session scores are on the same 1–7 scale, allowing direct within-subjects comparison.
 
-Source: `survey.csv` → column `confidence_score`
+Source: `survey.csv` → column `preparedness_score`
 
 ### 3. Contradictions Detected (count)
 Number of contradictions flagged by the agent during a session (user's claims that conflict with prior statements or the slide content).
@@ -87,7 +87,7 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
   - If all paired differences are zero, the test is skipped and p = 1.0 is reported
 
 ### Correlation
-- **Spearman's ρ** (`scipy.stats.spearmanr`): between session-2 confidence score and session-2 composite performance score (N = 30)
+- **Spearman's ρ** (`scipy.stats.spearmanr`): between session-2 perceived preparedness score and session-2 composite performance score (N = 30)
   - Tests whether participants who perceived the agent more positively also performed better
 
 **Significance threshold:** α = 0.05 throughout. Bonferroni-corrected α = 0.025 for post-hoc pairwise tests.
@@ -106,14 +106,14 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
 | **H2** Contradictions | Between conditions — Session 2 | Mann-Whitney U | **0.0015** | **Yes** |
 | **H2** Contradictions | Within memory (S1→S2) | Wilcoxon | **0.030** | **Yes** |
 | **H2** Contradictions | Within no-memory (S1→S2) | Wilcoxon | 1.0 (all zero) | No |
-| **H1** Confidence | Between conditions — Session 1 | Mann-Whitney U | 0.483 | No |
-| **H3** Confidence | Between conditions — Session 2 | Mann-Whitney U | 0.129 | No |
-| **H1** Confidence | Within memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
-| **H1** Confidence | Within no-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
+| **H1** Preparedness | Between conditions — Session 1 | Mann-Whitney U | 0.483 | No |
+| **H3** Preparedness | Between conditions — Session 2 | Mann-Whitney U | 0.129 | No |
+| **H1** Preparedness | Within memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
+| **H1** Preparedness | Within no-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
 | **Corr.** Perception × Performance | Spearman ρ = 0.444 | Spearman | **0.014** | **Yes** |
 
 ### Interpretation
-- **H1 supported:** Perceived confidence (1–7) increased significantly from session 1 to session 2 in both conditions (memory p = 0.0001, no-memory p = 0.0019). The improvement is not unique to the memory condition.
+- **H1 supported:** Perceived preparedness (1–7) increased significantly from session 1 to session 2 in both conditions (memory p = 0.0001, no-memory p = 0.0019). The improvement is not unique to the memory condition.
 - **H2 partially supported:** Memory-enabled participants had significantly fewer contradictions at session 2 (between-conditions, p = 0.0015) and reduced contradictions within the memory group over sessions (p = 0.030). No-memory participants showed no within-session change.
 - **H3 not supported:** No significant difference in overall agent perception between conditions at session 2 (p = 0.129).
 - **Correlation significant:** Agent perception score (session 2, 1–7) positively correlates with composite performance (ρ = 0.44, p = 0.014) — participants who rated the agent more positively also performed better.
@@ -125,7 +125,7 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
 | File | Description |
 |---|---|
 | `results_summary.csv` | Full results table for all tests |
-| `fig_line_plots.png` | Mean ± SE line plots for composite score and confidence by condition/session |
+| `fig_line_plots.png` | Mean ± SE line plots for composite score and perceived preparedness by condition/session |
 | `fig_box_plots.png` | Distribution box plots for all three DVs |
 | `fig_correlation.png` | Scatter plot of session-2 perception vs performance with regression line |
 | `analysis_nb.py` | Source notebook (convert via `jupytext --to notebook analysis_nb.py`) |

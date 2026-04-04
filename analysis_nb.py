@@ -4,11 +4,11 @@
 # **Design:** 2×2 mixed design (between-subjects × within-subjects)
 # - Between-subjects: `condition` (memory / no-memory)
 # - Within-subjects: `session` (1, 2)
-# - DVs: composite performance score (0–100), perceived confidence score (1–7),
+# - DVs: composite performance score (0–100), perceived preparedness score (1–7),
 #   contradictions detected (count)
 #
 # **Hypotheses tested:**
-# - **H1** — memory-enabled participants report higher perceived preparedness/confidence
+# - **H1** — memory-enabled participants report higher perceived preparedness
 #   (within-subjects improvement; S1→S2 within each condition)
 # - **H2** — memory-enabled participants produce fewer contradictions
 #   (between-conditions comparison per session + within-condition trend)
@@ -22,7 +22,7 @@
 #
 # **Data sources:**
 # - `results/*/summary.csv` — one row per participant-session (exported by export.py)
-# - `survey.csv` — flat CSV with `participant_id`, `session`, `confidence_score`
+# - `survey.csv` — flat CSV with `participant_id`, `session`, `preparedness_score`
 # - `analysis/participants.csv` — maps session directories to participant IDs and conditions
 #
 # **Conversion to Jupyter:** `jupytext --to notebook analysis_nb.py`
@@ -47,7 +47,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # --- Paths (edit as needed) ---
 RESULTS_DIR = Path("results")                  # directory containing timestamped run subdirs
-SURVEY_CSV = Path("survey.csv")                # flat CSV: participant_id, session, confidence_score
+SURVEY_CSV = Path("survey.csv")                # flat CSV: participant_id, session, preparedness_score
 PARTICIPANTS_CSV = Path("analysis/participants.csv")  # directory→participant_id mapping
 
 # --- Study constants ---
@@ -129,11 +129,11 @@ def validate_data(df: pd.DataFrame, label: str = "merged") -> None:
         if actual != expected:
             issues.append(f"Expected {expected} participants in '{cond}', found {actual}")
 
-    if "confidence_score" in df.columns:
-        bad_conf = df[~df["confidence_score"].between(1, 7)]
+    if "preparedness_score" in df.columns:
+        bad_conf = df[~df["preparedness_score"].between(1, 7)]
         if not bad_conf.empty:
             issues.append(
-                f"{len(bad_conf)} confidence_score value(s) outside [1, 7]"
+                f"{len(bad_conf)} preparedness_score value(s) outside [1, 7]"
             )
 
     if issues:
@@ -148,21 +148,21 @@ def validate_data(df: pd.DataFrame, label: str = "merged") -> None:
 perf_df = load_summary_csvs(RESULTS_DIR, PARTICIPANTS_CSV)
 perf_df["condition"] = perf_df["memory_type"].map(CONDITION_MAP)
 
-# Load confidence survey data
+# Load preparedness survey data
 if not SURVEY_CSV.exists():
     raise FileNotFoundError(
         f"Survey CSV not found at {SURVEY_CSV.resolve()}. "
-        "Expected columns: participant_id, session, confidence_score"
+        "Expected columns: participant_id, session, preparedness_score"
     )
 survey_df = pd.read_csv(SURVEY_CSV)
 survey_df["session"] = survey_df["session"].astype(int)
 print(f"Loaded survey CSV → {len(survey_df)} rows")
 
-# Merge: keep overall_score, contradictions_detected, and confidence_score
+# Merge: keep overall_score, contradictions_detected, and preparedness_score
 perf_cols = ["participant_id", "session", "condition",
              "overall_score", "contradictions_detected"]
 df = perf_df[perf_cols].merge(
-    survey_df[["participant_id", "session", "confidence_score"]],
+    survey_df[["participant_id", "session", "preparedness_score"]],
     on=["participant_id", "session"],
     how="inner",
     validate="1:1",
@@ -178,7 +178,7 @@ validate_data(df, label="merged dataset")
 # %%
 DVS = {
     "overall_score": "Composite Performance Score (0–100)",
-    "confidence_score": "Perceived Confidence Score (1–7)",
+    "preparedness_score": "Perceived Preparedness Score (1–7)",
     "contradictions_detected": "Contradictions Detected (count)",
 }
 
@@ -195,7 +195,7 @@ for col, label in DVS.items():
     print(desc.to_string())
 
 # %%
-# Line plots: Composite Performance Score and Perceived Confidence Score
+# Line plots: Composite Performance Score and Perceived Preparedness Score
 line_dvs = {k: v for k, v in DVS.items() if k != "contradictions_detected"}
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -438,35 +438,35 @@ perf_results = run_mixed_anova(df, "overall_score", DVS["overall_score"])
 contra_results = run_mixed_anova(df, "contradictions_detected", DVS["contradictions_detected"])
 
 # %% [markdown]
-# ## Section 5: H1 & H3 — Perceived Confidence / Agent Perception Score
+# ## Section 5: H1 & H3 — Perceived Preparedness / Agent Perception Score
 #
-# The confidence score (1–7) is derived from the post-session questionnaire (all 13
+# The perceived preparedness score (1–7) is derived from the post-session questionnaire (all 13
 # Likert items averaged on the natural 1–7 scale). It serves two roles:
 #
 # - **H1** (subjective performance / perceived preparedness): addressed by the
 #   **within-condition** Wilcoxon signed-rank tests — did participants report higher
-#   confidence after the second session compared to the first, within each condition?
+#   perceived preparedness after the second session compared to the first, within each condition?
 #
 # - **H3** (agent perception — helpfulness and question relevance): addressed by the
 #   **between-condition** Mann-Whitney U at **session 2** — did the memory-enabled agent
 #   produce a higher overall perception score than the no-memory agent?
 
 # %%
-conf_results = run_mixed_anova(df, "confidence_score", DVS["confidence_score"])
+conf_results = run_mixed_anova(df, "preparedness_score", DVS["preparedness_score"])
 
 # %% [markdown]
 # ## Section 6: Correlation — Agent Perception vs. Composite Performance (Session 2)
 #
 # To assess whether participants who perceived the agent more positively also performed
-# better, we compute the Spearman rank correlation between the session-2 confidence score
+# better, we compute the Spearman rank correlation between the session-2 perceived preparedness score
 # (agent perception proxy, H3; scale 1–7) and the session-2 composite performance score.
 # Spearman's ρ is used because normality assumptions failed for both variables.
 
 # %%
 s2 = df[df["session"] == 2][["participant_id", "condition",
-                               "confidence_score", "overall_score"]].dropna()
+                               "preparedness_score", "overall_score"]].dropna()
 
-rho, p_corr = stats.spearmanr(s2["confidence_score"], s2["overall_score"])
+rho, p_corr = stats.spearmanr(s2["preparedness_score"], s2["overall_score"])
 sig_corr = "Yes" if p_corr < ALPHA else "No"
 
 print(f"\n{'='*60}")
@@ -492,13 +492,13 @@ fig, ax = plt.subplots(figsize=(6, 5))
 palette = sns.color_palette("Set2", 2)
 cond_colors = {"memory": palette[0], "no-memory": palette[1]}
 for cond, grp in s2.groupby("condition"):
-    ax.scatter(grp["confidence_score"], grp["overall_score"],
+    ax.scatter(grp["preparedness_score"], grp["overall_score"],
                label=cond, color=cond_colors[cond], alpha=0.7)
 # Overall regression line
-m, b = np.polyfit(s2["confidence_score"], s2["overall_score"], 1)
-x_range = np.linspace(s2["confidence_score"].min(), s2["confidence_score"].max(), 100)
+m, b = np.polyfit(s2["preparedness_score"], s2["overall_score"], 1)
+x_range = np.linspace(s2["preparedness_score"].min(), s2["preparedness_score"].max(), 100)
 ax.plot(x_range, m * x_range + b, color="gray", linestyle="--", linewidth=1.5)
-ax.set_xlabel("Perceived Confidence / Agent Perception Score (Session 2)")
+ax.set_xlabel("Perceived Preparedness / Agent Perception Score (Session 2)")
 ax.set_ylabel("Composite Performance Score (Session 2)")
 ax.set_title(f"Agent Perception vs. Performance\nSpearman ρ = {rho:.3f}, p = {p_corr:.4f}")
 ax.legend(title="Condition")

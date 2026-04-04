@@ -17,7 +17,7 @@ project-root/
 ├── results/
 │   └── {YYYY-MM-DD_HH-MM-SS}/
 │       └── summary.csv                                               # one dir per session
-├── survey.csv                                                        # confidence scores (auto-generated)
+├── survey.csv                                                        # perceived preparedness scores (auto-generated)
 ├── analysis_nb.py                                                    # source — edit this, not the notebook
 └── analysis_executed.ipynb                                           # generated from analysis_nb.py
 ```
@@ -28,7 +28,7 @@ project-root/
 |---|---|
 | `analysis/participants.csv` | `participant_id`, `name`, `survey_name_before`, `survey_name_after`, `session_dir_1`, `session_dir_2`, `condition` |
 | `results/{dir}/summary.csv` | `overall_score`, `contradictions_detected`, `memory_type` |
-| `survey.csv` | `participant_id`, `session`, `confidence_score` |
+| `survey.csv` | `participant_id`, `session`, `preparedness_score` |
 
 ## Running the Pipeline
 
@@ -53,7 +53,7 @@ jupytext --to notebook analysis_nb.py -o analysis_executed.ipynb
 jupyter nbconvert --to notebook --execute analysis_executed.ipynb --inplace
 ```
 
-## Confidence Score Derivation (1–7 scale)
+## Perceived Preparedness Score Derivation (1–7 scale)
 
 | Session | Source | Method |
 |---|---|---|
@@ -77,9 +77,9 @@ jupyter nbconvert --to notebook --execute analysis_executed.ipynb --inplace
 
 | File | Contents |
 |---|---|
-| `survey.csv` | `participant_id, session, confidence_score` — overwritten by pipeline |
+| `survey.csv` | `participant_id, session, preparedness_score` — overwritten by pipeline |
 | `results_summary.csv` | All statistical test results (H1, H2, H3, correlation) |
-| `fig_line_plots.png` | Mean ± SE line plots — composite score and confidence by condition/session |
+| `fig_line_plots.png` | Mean ± SE line plots — composite score and perceived preparedness by condition/session |
 | `fig_box_plots.png` | Box plots for all 3 DVs by condition/session |
 | `fig_correlation.png` | Session-2 perception vs performance scatter + regression line |
 | `analysis_executed.ipynb` | Notebook with all cell outputs |
