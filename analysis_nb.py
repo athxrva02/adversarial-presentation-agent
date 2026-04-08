@@ -2,7 +2,7 @@
 # # Adversarial Presentation Agent — Statistical Analysis
 #
 # **Design:** 2×2 mixed design (between-subjects × within-subjects)
-# - Between-subjects: `condition` (memory / no-memory)
+# - Between-subjects: `condition` (hybrid-memory / non-hybrid-memory)
 # - Within-subjects: `session` (1, 2)
 # - DVs: composite performance score (0–100), perceived preparedness score (1–7),
 #   contradictions detected (count)
@@ -305,7 +305,7 @@ print(
 # ## Section 4: Analysis — Composite Performance Score
 #
 # The composite score (0–100) is the primary objective DV from the automated rubric
-# and voice analysis. This tests whether the memory condition leads to higher overall
+# and voice analysis. This tests whether the hybrid-memory condition leads to higher overall
 # presentation quality, independent of the three specific hypotheses.
 
 # %%
@@ -452,7 +452,7 @@ contra_results = run_mixed_anova(df, "contradictions_detected", DVS["contradicti
 #
 # - **H3** (agent perception — helpfulness and question relevance): addressed by the
 #   **between-condition** Mann-Whitney U at **session 2** — did the memory-enabled agent
-#   produce a higher overall perception score than the no-memory agent?
+#   produce a higher overall perception score than the non-hybrid-memory agent?
 
 # %%
 conf_results = run_mixed_anova(df, "preparedness_score", DVS["preparedness_score"])

@@ -100,15 +100,15 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
 |---|---|---|---|---|
 | Composite Performance Score | Between conditions — Session 1 | Mann-Whitney U | 0.709 | No |
 | Composite Performance Score | Between conditions — Session 2 | Mann-Whitney U | 0.561 | No |
-| Composite Performance Score | Within memory (S1→S2) | Wilcoxon | 0.083 | No |
+| Composite Performance Score | Within hybrid-memory (S1→S2) | Wilcoxon | 0.083 | No |
 | Composite Performance Score | Within non-hybrid-memory (S1→S2) | Wilcoxon | 0.208 | No |
 | **H2** Contradictions | Between conditions — Session 1 | Mann-Whitney U | 0.164 | No |
 | **H2** Contradictions | Between conditions — Session 2 | Mann-Whitney U | **0.0015** | **Yes** |
-| **H2** Contradictions | Within memory (S1→S2) | Wilcoxon | **0.030** | **Yes** |
+| **H2** Contradictions | Within hybrid-memory (S1→S2) | Wilcoxon | **0.030** | **Yes** |
 | **H2** Contradictions | Within non-hybrid-memory (S1→S2) | Wilcoxon | 1.0 (all zero) | No |
 | **H1** Preparedness | Between conditions — Session 1 | Mann-Whitney U | 0.483 | No |
 | **H3** Preparedness | Between conditions — Session 2 | Mann-Whitney U | 0.129 | No |
-| **H1** Preparedness | Within memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
+| **H1** Preparedness | Within hybrid-memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
 | **H1** Preparedness | Within non-hybrid-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
 | **Corr.** Perception × Performance | Spearman ρ = 0.444 | Spearman | **0.014** | **Yes** |
 

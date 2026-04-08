@@ -17,12 +17,11 @@ import pytest
 
 from analysis.prepare_data import (
     LIKERT_7,
-    PREPAREDNESS_5,
+    PREPAREDNESS_7,
     after_likert_cols,
     augment_summary_csvs,
     build_survey_csv,
     preparedness_to_score,
-    rescale_after,
     run as prepare_run,
 )
 from analysis.pipeline import prepare, run as pipeline_run, run_notebook
@@ -45,31 +44,14 @@ def _summary_paths(project_root: Path) -> list[Path]:
 # Unit tests — pure functions
 # ---------------------------------------------------------------------------
 
-class TestRescaleAfter:
-    def test_min_maps_to_score_min(self):
-        assert rescale_after(13) == pytest.approx(3.0)
-
-    def test_max_maps_to_score_max(self):
-        assert rescale_after(91) == pytest.approx(15.0)
-
-    def test_midpoint(self):
-        # raw=52 is the midpoint of [13, 91]; should map to midpoint of [3, 15] = 9
-        assert rescale_after(52) == pytest.approx(9.0)
-
-    def test_output_in_range(self):
-        for raw in range(13, 92):
-            score = rescale_after(raw)
-            assert 3.0 <= score <= 15.0
-
-
 class TestPreparednessToScore:
     @pytest.mark.parametrize("label,expected", [
-        ("Not prepared", 3.0),
-        ("Very unprepared", 3.0),
-        ("Somewhat unprepared", 6.0),
-        ("Neither prepared nor unprepared", 9.0),
-        ("Somewhat prepared", 12.0),
-        ("Very prepared", 15.0),
+        ("Very unprepared", 1.0),
+        ("Not prepared", 2.0),
+        ("Somewhat unprepared", 3.0),
+        ("Neither prepared nor unprepared", 4.0),
+        ("Somewhat prepared", 5.0),
+        ("Very prepared", 7.0),
     ])
     def test_known_labels(self, label, expected):
         assert preparedness_to_score(label) == pytest.approx(expected)
@@ -79,9 +61,9 @@ class TestPreparednessToScore:
             preparedness_to_score("Totally unprepared")
 
     def test_output_always_in_range(self):
-        for label in PREPAREDNESS_5:
+        for label in PREPAREDNESS_7:
             score = preparedness_to_score(label)
-            assert 3.0 <= score <= 15.0
+            assert 1.0 <= score <= 7.0
 
 
 class TestAfterLikertCols:
@@ -201,9 +183,9 @@ class TestBuildSurveyCsv:
         out = synthetic_project / "survey.csv"
 
         df = build_survey_csv(participants, before_csv, after_csv, out)
-        assert list(df.columns) == ["participant_id", "session", "confidence_score"]
+        assert list(df.columns) == ["participant_id", "session", "preparedness_score"]
 
-    def test_confidence_score_range(self, synthetic_project):
+    def test_preparedness_score_range(self, synthetic_project):
         participants = _load_participants(synthetic_project)
         analysis_dir = synthetic_project / "analysis"
         before_csv = next(analysis_dir.glob("Questionnaire Before*"))
@@ -211,8 +193,8 @@ class TestBuildSurveyCsv:
         out = synthetic_project / "survey.csv"
 
         df = build_survey_csv(participants, before_csv, after_csv, out)
-        assert df["confidence_score"].between(3.0, 15.0).all(), (
-            f"Scores out of [3, 15]: {df[~df['confidence_score'].between(3, 15)]}"
+        assert df["preparedness_score"].between(1.0, 7.0).all(), (
+            f"Scores out of [1, 7]: {df[~df['preparedness_score'].between(1, 7)]}"
         )
 
     def test_session1_score_comes_from_preparedness(self, synthetic_project):
@@ -225,16 +207,16 @@ class TestBuildSurveyCsv:
         df = build_survey_csv(participants, before_csv, after_csv, out)
         s1 = df[df["session"] == 1]
 
-        # "Somewhat unprepared" → 2 × 3 = 6, "Neither..." → 3 × 3 = 9, "Not prepared" → 1 × 3 = 3
-        expected = {"P01": 6.0, "P02": 9.0, "P03": 3.0, "P04": 6.0, "P05": 9.0, "P06": 6.0}
+        # "Somewhat unprepared" → 3, "Neither..." → 4, "Not prepared" → 2
+        expected = {"P01": 3.0, "P02": 4.0, "P03": 2.0, "P04": 3.0, "P05": 4.0, "P06": 3.0}
         for pid, exp in expected.items():
-            actual = s1.loc[s1["participant_id"] == pid, "confidence_score"].iloc[0]
+            actual = s1.loc[s1["participant_id"] == pid, "preparedness_score"].iloc[0]
             assert actual == pytest.approx(exp), f"{pid} S1: expected {exp}, got {actual}"
 
-    def test_session2_score_is_rescaled_likert(self, synthetic_project):
+    def test_session2_score_is_mean_likert(self, synthetic_project):
         """
         Carol Lee answered "Strongly Agree" (7) to all 13 questions.
-        raw = 7 × 13 = 91 → rescale_after(91) = 15.0
+        mean = 7.0
         """
         participants = _load_participants(synthetic_project)
         analysis_dir = synthetic_project / "analysis"
@@ -244,7 +226,7 @@ class TestBuildSurveyCsv:
 
         df = build_survey_csv(participants, before_csv, after_csv, out)
         carol_s2 = df[(df["participant_id"] == "P03") & (df["session"] == 2)]
-        assert carol_s2["confidence_score"].iloc[0] == pytest.approx(15.0)
+        assert carol_s2["preparedness_score"].iloc[0] == pytest.approx(7.0)
 
     def test_sessions_present_for_all_participants(self, synthetic_project):
         participants = _load_participants(synthetic_project)

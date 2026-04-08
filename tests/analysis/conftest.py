@@ -36,6 +36,16 @@ SCORES = {
     ("P06", 1): 42.0, ("P06", 2): 52.0,
 }
 
+# Contradictions per (participant, session) — varied to avoid zero-variance edge cases
+CONTRADICTIONS = {
+    ("P01", 1): 2, ("P01", 2): 0,
+    ("P02", 1): 1, ("P02", 2): 0,
+    ("P03", 1): 3, ("P03", 2): 1,
+    ("P04", 1): 0, ("P04", 2): 0,
+    ("P05", 1): 1, ("P05", 2): 1,
+    ("P06", 1): 0, ("P06", 2): 0,
+}
+
 # Preparedness labels for session-1 scores (mapped to 1–7)
 PREPAREDNESS = {
     "P01": "Somewhat unprepared",      # → 3
@@ -100,8 +110,8 @@ def _make_summary_row(pid: str, session: int, condition: str, ts: str) -> dict:
         "duration_seconds": 300.0,
         "overall_score": SCORES[(pid, session)],
         "claims_count": 4,
-        "contradictions_detected": 1,
-        "contradictions_accepted": 1,
+        "contradictions_detected": CONTRADICTIONS[(pid, session)],
+        "contradictions_accepted": CONTRADICTIONS[(pid, session)],
         "contradictions_rejected": 0,
         "strengths": "Clear claim",
         "weaknesses": "Lacks examples",
