@@ -227,7 +227,7 @@ fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 for ax, (col, label) in zip(axes, DVS.items()):
     plot_df = df.copy()
     plot_df["group"] = plot_df["condition"] + " / S" + plot_df["session"].astype(str)
-    order = ["memory / S1", "memory / S2", "no-memory / S1", "no-memory / S2"]
+    order = ["hybrid-memory / S1", "hybrid-memory / S2", "non-hybrid-memory / S1", "non-hybrid-memory / S2"]
     sns.boxplot(data=plot_df, x="group", y=col, order=order, ax=ax)
     ax.set_xlabel("Condition / Session")
     ax.set_ylabel(label)
