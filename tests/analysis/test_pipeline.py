@@ -46,8 +46,8 @@ def _summary_paths(project_root: Path) -> list[Path]:
 
 class TestPreparednessToScore:
     @pytest.mark.parametrize("label,expected", [
-        ("Very unprepared", 1.0),
-        ("Not prepared", 2.0),
+        ("Not prepared", 1.0),
+        ("Very unprepared", 2.0),
         ("Somewhat unprepared", 3.0),
         ("Neither prepared nor unprepared", 4.0),
         ("Somewhat prepared", 5.0),

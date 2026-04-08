@@ -36,8 +36,8 @@ Derived from questionnaire responses on a 7-point Likert scale. Measures perceiv
 
 | Response                        | Score |
 |---------------------------------|---|
-| Very unprepared                 | 1 |
-| Not prepared                    | 2 |
+| Not prepared                    | 1 |
+| Very unprepared                 | 2 |
 | Somewhat unprepared             | 3 |
 | Neither prepared nor unprepared | 4 |
 | Somewhat prepared               | 5 |
