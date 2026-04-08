@@ -33,12 +33,12 @@ LIKERT_7: dict[str, int] = {
 }
 
 PREPAREDNESS_7: dict[str, int] = {
-    "Very unprepared": 1,
-    "Not prepared": 2,
+    "Not prepared": 1,
+    "Very unprepared": 2,
     "Somewhat unprepared": 3,
     "Neither prepared nor unprepared": 4,
     "Somewhat prepared": 5,
-    "Prepared": 6,
+    "Well prepared": 6,
     "Very prepared": 7,
 }
 

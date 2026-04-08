@@ -34,15 +34,15 @@ Derived from questionnaire responses on a 7-point Likert scale. Measures perceiv
 
 **Session 1 score** — mapped from the Before-interaction questionnaire "preparedness level" item onto the 7-point scale:
 
-| Response | Score |
-|---|---|
-| Very unprepared | 1 |
-| Not prepared | 2 |
-| Somewhat unprepared | 3 |
+| Response                        | Score |
+|---------------------------------|---|
+| Very unprepared                 | 1 |
+| Not prepared                    | 2 |
+| Somewhat unprepared             | 3 |
 | Neither prepared nor unprepared | 4 |
-| Somewhat prepared | 5 |
-| Prepared | 6 |
-| Very prepared | 7 |
+| Somewhat prepared               | 5 |
+| Well prepared                   | 6 |
+| Very prepared                   | 7 |
 
 **Session 2 score** — mean of the 13-item After-interaction Likert questionnaire (raw, no rescaling):
 
