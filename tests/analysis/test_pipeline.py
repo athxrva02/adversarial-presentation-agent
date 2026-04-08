@@ -51,6 +51,7 @@ class TestPreparednessToScore:
         ("Somewhat unprepared", 3.0),
         ("Neither prepared nor unprepared", 4.0),
         ("Somewhat prepared", 5.0),
+        ("Prepared", 6.0),
         ("Very prepared", 7.0),
     ])
     def test_known_labels(self, label, expected):

@@ -41,6 +41,7 @@ Derived from questionnaire responses on a 7-point Likert scale. Measures perceiv
 | Somewhat unprepared | 3 |
 | Neither prepared nor unprepared | 4 |
 | Somewhat prepared | 5 |
+| Prepared | 6 |
 | Very prepared | 7 |
 
 **Session 2 score** — mean of the 13-item After-interaction Likert questionnaire (raw, no rescaling):
