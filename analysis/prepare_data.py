@@ -8,9 +8,9 @@ What it does:
 1. Reads analysis/participants.csv (canonical participant → session directory mapping)
 2. Augments each results/{session_dir}/summary.csv with participant_id, session, and
    memory_type columns (writes in-place)
-3. Builds survey.csv with participant_id, session, preparedness_score (range 3–15):
-   - session 1 → derived from before-interaction preparedness question (×3)
-   - session 2 → all 13 after-interaction Likert items rescaled to [3, 15]
+3. Builds survey.csv with participant_id, session, preparedness_score (range 1–7):
+   - session 1 → before-interaction preparedness question mapped to 1–7
+   - session 2 → mean of 13 after-interaction Likert items (each 1–7)
 """
 
 from __future__ import annotations
@@ -32,36 +32,27 @@ LIKERT_7: dict[str, int] = {
     "Strongly Agree": 7,
 }
 
-PREPAREDNESS_5: dict[str, int] = {
-    "Not prepared": 1,
+PREPAREDNESS_7: dict[str, int] = {
+    "Not prepared": 2,
     "Very unprepared": 1,
-    "Somewhat unprepared": 2,
-    "Neither prepared nor unprepared": 3,
-    "Somewhat prepared": 4,
-    "Very prepared": 5,
+    "Somewhat unprepared": 3,
+    "Neither prepared nor unprepared": 4,
+    "Somewhat prepared": 5,
+    "Very prepared": 7,
 }
-
-# 13 items × [1, 7] → raw range [13, 91] → rescale linearly to [3, 15]
-_RAW_MIN, _RAW_MAX = 13, 91
-_SCORE_MIN, _SCORE_MAX = 3, 15
 
 # After-survey metadata columns that are NOT Likert items
 _AFTER_META_COLS = {"ID", "Start time", "Completion time", "Email", "Name",
                     "Last modified time", "Name2"}
 
 
-def rescale_after(raw: float) -> float:
-    """Rescale a raw 13-item Likert sum from [13, 91] to [3, 15]."""
-    return _SCORE_MIN + (raw - _RAW_MIN) / (_RAW_MAX - _RAW_MIN) * (_SCORE_MAX - _SCORE_MIN)
-
-
 def preparedness_to_score(label: str) -> float:
-    """Map a preparedness label to [3, 15] via a 1–5 scale multiplied by 3."""
-    val = PREPAREDNESS_5.get(str(label).strip())
+    """Map a preparedness label directly onto the 1–7 scale."""
+    val = PREPAREDNESS_7.get(str(label).strip())
     if val is None:
         raise ValueError(f"Unknown preparedness label: {label!r}. "
-                         f"Expected one of: {list(PREPAREDNESS_5)}")
-    return float(val * 3)
+                         f"Expected one of: {list(PREPAREDNESS_7)}")
+    return float(val)
 
 
 def after_likert_cols(after_df: pd.DataFrame) -> list[str]:
@@ -124,8 +115,8 @@ def build_survey_csv(
     """
     Build survey.csv with columns: participant_id, session, preparedness_score.
 
-    session 1 score  — preparedness question from before-survey, mapped to [3, 15]
-    session 2 score  — all 13 Likert items from after-survey, rescaled to [3, 15]
+    session 1 score  — preparedness question from before-survey, mapped to 1–7
+    session 2 score  — mean of 13 Likert items from after-survey (each 1–7)
 
     Returns the DataFrame (also written to `out`).
     """
@@ -178,7 +169,7 @@ def build_survey_csv(
                 rows.append({
                     "participant_id": pid,
                     "session": 2,
-                    "preparedness_score": round(rescale_after(sum(raw_scores)), 3),
+                    "preparedness_score": round(sum(raw_scores) / len(raw_scores), 3),
                 })
 
     for w in warnings:

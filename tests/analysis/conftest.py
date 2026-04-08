@@ -36,24 +36,24 @@ SCORES = {
     ("P06", 1): 42.0, ("P06", 2): 52.0,
 }
 
-# Preparedness labels for session-1 confidence scores
+# Preparedness labels for session-1 scores (mapped to 1–7)
 PREPAREDNESS = {
-    "P01": "Somewhat unprepared",      # → 6
-    "P02": "Neither prepared nor unprepared",  # → 9
-    "P03": "Not prepared",             # → 3
-    "P04": "Somewhat unprepared",      # → 6
-    "P05": "Neither prepared nor unprepared",  # → 9
-    "P06": "Somewhat unprepared",      # → 6
+    "P01": "Somewhat unprepared",      # → 3
+    "P02": "Neither prepared nor unprepared",  # → 4
+    "P03": "Not prepared",             # → 2
+    "P04": "Somewhat unprepared",      # → 3
+    "P05": "Neither prepared nor unprepared",  # → 4
+    "P06": "Somewhat unprepared",      # → 3
 }
 
 # After-survey Likert responses (all 13 questions, same answer per participant for simplicity)
 AFTER_LIKERT_RESPONSES: dict[str, str] = {
-    "Alice Smith": "Agree",           # 6 × 13 = 78 → rescale → ~13.154
-    "Bob Jones": "Somewhat Agree",    # 5 × 13 = 65 → rescale → ~10.538
-    "Carol Lee": "Strongly Agree",    # 7 × 13 = 91 → rescale → 15.0
-    "David Kim": "Agree",             # 78 → ~13.154
-    "Eva Brown": "Neutral",           # 4 × 13 = 52 → rescale → ~7.923
-    "Frank Wu": "Somewhat Agree",     # 65 → ~10.538
+    "Alice Smith": "Agree",           # mean = 6.0
+    "Bob Jones": "Somewhat Agree",    # mean = 5.0
+    "Carol Lee": "Strongly Agree",    # mean = 7.0
+    "David Kim": "Agree",             # mean = 6.0
+    "Eva Brown": "Neutral",           # mean = 4.0
+    "Frank Wu": "Somewhat Agree",     # mean = 5.0
 }
 
 AFTER_QUESTION_COLS = [
