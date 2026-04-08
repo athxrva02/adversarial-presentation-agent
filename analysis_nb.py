@@ -60,8 +60,8 @@ N_COMPARISONS = N_SESSIONS          # Bonferroni denominator for post-hoc t-test
 ALPHA_BONFERRONI = ALPHA / N_COMPARISONS
 
 CONDITION_MAP = {
-    "hybrid": "memory",
-    "document_only": "no-memory",
+    "hybrid": "hybrid-memory",
+    "document_only": "non-hybrid-memory",
 }
 
 sns.set_theme(style="whitegrid", palette="Set2")
@@ -124,7 +124,7 @@ def validate_data(df: pd.DataFrame, label: str = "merged") -> None:
         )
 
     cond_counts = df.drop_duplicates("participant_id")["condition"].value_counts()
-    for cond, expected in [("memory", N_PER_CONDITION), ("no-memory", N_PER_CONDITION)]:
+    for cond, expected in [("hybrid-memory", N_PER_CONDITION), ("non-hybrid-memory", N_PER_CONDITION)]:
         actual = cond_counts.get(cond, 0)
         if actual != expected:
             issues.append(f"Expected {expected} participants in '{cond}', found {actual}")
@@ -240,6 +240,9 @@ plt.show()
 
 # %% [markdown]
 # ## Section 3: Assumption Checks
+#
+# Normality is assessed on the **raw values within each condition × session cell** (not on ANOVA
+# residuals). With n ≤ 15 per cell, cell-level Shapiro-Wilk is the appropriate choice.
 
 # %%
 def check_normality(df: pd.DataFrame, col: str, label: str) -> bool:
@@ -350,8 +353,8 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
             print(f"  Bonferroni α = {ALPHA}/{N_COMPARISONS} = {ALPHA_BONFERRONI:.4f}")
             for sess in sorted(df["session"].unique()):
                 sess_df = df[df["session"] == sess]
-                mem = sess_df[sess_df["condition"] == "memory"][col].dropna().values
-                nomem = sess_df[sess_df["condition"] == "no-memory"][col].dropna().values
+                mem = sess_df[sess_df["condition"] == "hybrid-memory"][col].dropna().values
+                nomem = sess_df[sess_df["condition"] == "non-hybrid-memory"][col].dropna().values
                 t, p_unc = stats.ttest_ind(mem, nomem)
                 p_bonf = min(p_unc * N_COMPARISONS, 1.0)
                 d = cohen_d(mem, nomem)
@@ -383,8 +386,8 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
         print("\n  Mann-Whitney U (between conditions, per session):")
         for sess in sorted(df["session"].unique()):
             sess_df = df[df["session"] == sess]
-            mem = sess_df[sess_df["condition"] == "memory"][col].dropna().values
-            nomem = sess_df[sess_df["condition"] == "no-memory"][col].dropna().values
+            mem = sess_df[sess_df["condition"] == "hybrid-memory"][col].dropna().values
+            nomem = sess_df[sess_df["condition"] == "non-hybrid-memory"][col].dropna().values
             U, p = stats.mannwhitneyu(mem, nomem, alternative="two-sided")
             sig = "Yes" if p < ALPHA else "No"
             print(f"    Session {sess}: U = {U:.1f}, p = {p:.4f} → Significant: {sig}")
@@ -396,7 +399,7 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
 
         # Within-group: Wilcoxon signed-rank per condition
         print("\n  Wilcoxon signed-rank (within condition across sessions):")
-        for cond in ["memory", "no-memory"]:
+        for cond in ["hybrid-memory", "non-hybrid-memory"]:
             cond_df = df[df["condition"] == cond].sort_values(["participant_id", "session"])
             s1 = cond_df[cond_df["session"] == 1].set_index("participant_id")[col]
             s2 = cond_df[cond_df["session"] == 2].set_index("participant_id")[col]
@@ -490,7 +493,7 @@ corr_results = [{
 # Scatter plot with regression line
 fig, ax = plt.subplots(figsize=(6, 5))
 palette = sns.color_palette("Set2", 2)
-cond_colors = {"memory": palette[0], "no-memory": palette[1]}
+cond_colors = {"hybrid-memory": palette[0], "non-hybrid-memory": palette[1]}
 for cond, grp in s2.groupby("condition"):
     ax.scatter(grp["preparedness_score"], grp["overall_score"],
                label=cond, color=cond_colors[cond], alpha=0.7)

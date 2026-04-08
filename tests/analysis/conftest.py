@@ -18,12 +18,12 @@ import pytest
 # ---------------------------------------------------------------------------
 PARTICIPANTS = [
     # pid, survey_before, survey_after, s1_dir, s2_dir, condition
-    ("P01", "Alice Smith", "Alice Smith", "2026-01-01_10-00-00", "2026-01-01_10-30-00", "memory"),
-    ("P02", "Bob Jones", "Bob Jones", "2026-01-01_11-00-00", "2026-01-01_11-30-00", "memory"),
-    ("P03", "Carol Lee", "Carol Lee", "2026-01-01_12-00-00", "2026-01-01_12-30-00", "memory"),
-    ("P04", "David Kim", "David Kim", "2026-01-01_13-00-00", "2026-01-01_13-30-00", "no-memory"),
-    ("P05", "Eva Brown", "Eva Brown", "2026-01-01_14-00-00", "2026-01-01_14-30-00", "no-memory"),
-    ("P06", "Frank Wu", "Frank Wu", "2026-01-01_15-00-00", "2026-01-01_15-30-00", "no-memory"),
+    ("P01", "Alice Smith", "Alice Smith", "2026-01-01_10-00-00", "2026-01-01_10-30-00", "hybrid-memory"),
+    ("P02", "Bob Jones", "Bob Jones", "2026-01-01_11-00-00", "2026-01-01_11-30-00", "hybrid-memory"),
+    ("P03", "Carol Lee", "Carol Lee", "2026-01-01_12-00-00", "2026-01-01_12-30-00", "hybrid-memory"),
+    ("P04", "David Kim", "David Kim", "2026-01-01_13-00-00", "2026-01-01_13-30-00", "non-hybrid-memory"),
+    ("P05", "Eva Brown", "Eva Brown", "2026-01-01_14-00-00", "2026-01-01_14-30-00", "non-hybrid-memory"),
+    ("P06", "Frank Wu", "Frank Wu", "2026-01-01_15-00-00", "2026-01-01_15-30-00", "non-hybrid-memory"),
 ]
 
 # Overall scores for each (participant, session) — varied to give ANOVA something to work with
@@ -90,7 +90,7 @@ SUMMARY_COLS = [
 
 
 def _make_summary_row(pid: str, session: int, condition: str, ts: str) -> dict:
-    memory_type = "hybrid" if condition == "memory" else "document_only"
+    memory_type = "hybrid" if condition == "hybrid-memory" else "document_only"
     return {
         "run_timestamp": ts,
         "session_id": f"sess_{pid}_{session}",

@@ -134,7 +134,7 @@ class TestAugmentSummaryCsvs:
         participants = _load_participants(synthetic_project)
         augment_summary_csvs(participants, synthetic_project / "results")
 
-        no_mem = participants[participants["condition"] == "no-memory"]
+        no_mem = participants[participants["condition"] == "non-hybrid-memory"]
         for _, row in no_mem.iterrows():
             for dir_col in ("session_dir_1", "session_dir_2"):
                 path = synthetic_project / "results" / row[dir_col] / "summary.csv"

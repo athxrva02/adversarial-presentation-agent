@@ -102,7 +102,7 @@ def augment_summary_csvs(
 
             # Normalise memory_type so CONDITION_MAP in the notebook resolves correctly
             if "memory_type" not in df.columns or df["memory_type"].isna().all():
-                df["memory_type"] = "hybrid" if condition == "memory" else "document_only"
+                df["memory_type"] = "hybrid" if condition == "hybrid-memory" else "document_only"
 
             # Reorder: put participant_id and session first for readability
             leading = ["participant_id", "session"]
@@ -129,10 +129,12 @@ def build_survey_csv(
 
     Returns the DataFrame (also written to `out`).
     """
-    before_raw = pd.read_csv(before_csv).rename(
+    _read = pd.read_excel if before_csv.suffix == ".xlsx" else pd.read_csv
+    before_raw = _read(before_csv).rename(
         columns={"Column": "speaking_ability", "2": "preparedness"}
     )
-    after_raw = pd.read_csv(after_csv)
+    _read_after = pd.read_excel if after_csv.suffix == ".xlsx" else pd.read_csv
+    after_raw = _read_after(after_csv)
     likert_cols = after_likert_cols(after_raw)
 
     rows: list[dict] = []

@@ -3,7 +3,7 @@
 ## Study Design
 
 **Type:** 2 × 2 mixed design  
-**Between-subjects:** `condition` — `memory` (hybrid conversational memory) vs `no-memory` (session-only context)  
+**Between-subjects:** `condition` — `hybrid-memory` (hybrid conversational memory) vs `non-hybrid-memory` (session-only context)  
 **Within-subjects:** `session` — Session 1 (baseline) vs Session 2 (post-practice)  
 **N:** 30 participants, 15 per condition  
 **Note:** Pre-registered design specified 3 sessions; only 2 were completed (noted as a limitation).
@@ -101,20 +101,20 @@ Source: `results/<session_dir>/summary.csv` → column `contradictions_detected`
 | Composite Performance Score | Between conditions — Session 1 | Mann-Whitney U | 0.709 | No |
 | Composite Performance Score | Between conditions — Session 2 | Mann-Whitney U | 0.561 | No |
 | Composite Performance Score | Within memory (S1→S2) | Wilcoxon | 0.083 | No |
-| Composite Performance Score | Within no-memory (S1→S2) | Wilcoxon | 0.208 | No |
+| Composite Performance Score | Within non-hybrid-memory (S1→S2) | Wilcoxon | 0.208 | No |
 | **H2** Contradictions | Between conditions — Session 1 | Mann-Whitney U | 0.164 | No |
 | **H2** Contradictions | Between conditions — Session 2 | Mann-Whitney U | **0.0015** | **Yes** |
 | **H2** Contradictions | Within memory (S1→S2) | Wilcoxon | **0.030** | **Yes** |
-| **H2** Contradictions | Within no-memory (S1→S2) | Wilcoxon | 1.0 (all zero) | No |
+| **H2** Contradictions | Within non-hybrid-memory (S1→S2) | Wilcoxon | 1.0 (all zero) | No |
 | **H1** Preparedness | Between conditions — Session 1 | Mann-Whitney U | 0.483 | No |
 | **H3** Preparedness | Between conditions — Session 2 | Mann-Whitney U | 0.129 | No |
 | **H1** Preparedness | Within memory (S1→S2) | Wilcoxon | **0.0001** | **Yes** |
-| **H1** Preparedness | Within no-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
+| **H1** Preparedness | Within non-hybrid-memory (S1→S2) | Wilcoxon | **0.0019** | **Yes** |
 | **Corr.** Perception × Performance | Spearman ρ = 0.444 | Spearman | **0.014** | **Yes** |
 
 ### Interpretation
-- **H1 supported:** Perceived preparedness (1–7) increased significantly from session 1 to session 2 in both conditions (memory p = 0.0001, no-memory p = 0.0019). The improvement is not unique to the memory condition.
-- **H2 partially supported:** Memory-enabled participants had significantly fewer contradictions at session 2 (between-conditions, p = 0.0015) and reduced contradictions within the memory group over sessions (p = 0.030). No-memory participants showed no within-session change.
+- **H1 supported:** Perceived preparedness (1–7) increased significantly from session 1 to session 2 in both conditions (hybrid-memory p = 0.0001, non-hybrid-memory p = 0.0019). The improvement is not unique to the hybrid-memory condition.
+- **H2 partially supported:** Hybrid-memory participants had significantly fewer contradictions at session 2 (between-conditions, p = 0.0015) and reduced contradictions within the hybrid-memory group over sessions (p = 0.030). Non-hybrid-memory participants showed no within-session change.
 - **H3 not supported:** No significant difference in overall agent perception between conditions at session 2 (p = 0.129).
 - **Correlation significant:** Agent perception score (session 2, 1–7) positively correlates with composite performance (ρ = 0.44, p = 0.014) — participants who rated the agent more positively also performed better.
 

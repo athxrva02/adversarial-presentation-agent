@@ -1,7 +1,7 @@
 """
 pipeline.py — end-to-end analysis pipeline
 
-Prepares data then executes analysis.ipynb in-process via nbconvert.
+Prepares data then converts analysis_nb.py → notebook via jupytext and executes it.
 
 Usage:
     python analysis/pipeline.py              # full pipeline
@@ -21,6 +21,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import jupytext
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 
@@ -39,7 +40,7 @@ def run_notebook(
     timeout: int = 600,
 ) -> nbformat.NotebookNode:
     """
-    Execute analysis.ipynb from `root` using nbconvert.
+    Convert analysis_nb.py → notebook via jupytext, execute it, and return the result.
 
     The notebook's relative file paths (results/, survey.csv) are resolved
     against `root` because the kernel is launched with that as its working
@@ -48,7 +49,7 @@ def run_notebook(
     Parameters
     ----------
     root:
-        Project root — must contain analysis.ipynb, results/, and survey.csv.
+        Project root — must contain analysis_nb.py, results/, and survey.csv.
     output_path:
         If given, write the executed notebook here (e.g. analysis_executed.ipynb).
     timeout:
@@ -58,12 +59,11 @@ def run_notebook(
     -------
     The executed NotebookNode (in-memory).
     """
-    nb_path = root / "analysis.ipynb"
-    if not nb_path.exists():
-        raise FileNotFoundError(f"Notebook not found: {nb_path}")
+    nb_src = root / "analysis_nb.py"
+    if not nb_src.exists():
+        raise FileNotFoundError(f"Source not found: {nb_src}")
 
-    with nb_path.open() as f:
-        nb = nbformat.read(f, as_version=4)
+    nb = jupytext.read(nb_src)
 
     # Force non-interactive matplotlib backend so plt.show() is a no-op
     prev_backend = os.environ.get("MPLBACKEND")
