@@ -10,7 +10,7 @@ What it does:
    memory_type columns (writes in-place)
 3. Builds survey.csv with participant_id, session, preparedness_score, agent_perception_score:
    - session 1 → before-interaction preparedness question mapped to 1–7
-   - session 2 → preparedness_score = mean of 13 after-interaction Likert items (each 1–7)
+   - session 2 → preparedness_score = mean of 7 confidence/preparedness items (each 1–7)
                   agent_perception_score = mean of 6 usefulness/reliability/actionability items
 """
 
@@ -130,7 +130,7 @@ def build_survey_csv(
     agent_perception_score.
 
     session 1 score  — preparedness question from before-survey, mapped to 1–7
-    session 2 score  — preparedness_score: mean of 13 Likert items (each 1–7)
+    session 2 score  — preparedness_score: mean of 7 confidence/preparedness Likert items (each 1–7)
                        agent_perception_score: mean of 6 usefulness/reliability/actionability items
 
     Returns the DataFrame (also written to `out`).
@@ -181,16 +181,24 @@ def build_survey_csv(
                     raw_scores.append(encoded)
 
             if len(raw_scores) == len(likert_cols):
-                # Agent perception score: mean of usefulness/reliability/actionability items
+                # Split items into non-overlapping subsets
                 perception_scores = [
                     encoded
                     for col, encoded in zip(likert_cols, raw_scores)
                     if col in _AGENT_PERCEPTION_ITEMS
                 ]
+                preparedness_scores = [
+                    encoded
+                    for col, encoded in zip(likert_cols, raw_scores)
+                    if col not in _AGENT_PERCEPTION_ITEMS
+                ]
                 rows.append({
                     "participant_id": pid,
                     "session": 2,
-                    "preparedness_score": round(sum(raw_scores) / len(raw_scores), 3),
+                    "preparedness_score": (
+                        round(sum(preparedness_scores) / len(preparedness_scores), 3)
+                        if preparedness_scores else None
+                    ),
                     "agent_perception_score": (
                         round(sum(perception_scores) / len(perception_scores), 3)
                         if perception_scores else None

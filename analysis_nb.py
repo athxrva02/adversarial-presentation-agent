@@ -469,8 +469,9 @@ contra_results = run_mixed_anova(df, "contradictions_detected", DVS["contradicti
 #
 # The perceived preparedness score (1–7) is derived from the questionnaires: session 1 uses
 # the pre-interaction preparedness item (mapped 1–7), session 2 uses the unweighted mean of
-# all 13 post-interaction Likert items. This tests **H1**: do participants report higher
-# perceived preparedness after the second session?
+# the 7 post-interaction Likert items related to confidence/preparedness (excluding the 6
+# agent-perception items). This tests **H1**: do participants report higher perceived
+# preparedness after the second session?
 
 # %%
 conf_results = run_mixed_anova(df, "preparedness_score", DVS["preparedness_score"])
