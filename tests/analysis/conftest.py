@@ -50,7 +50,7 @@ CONTRADICTIONS = {
 PREPAREDNESS = {
     "P01": "Somewhat unprepared",      # → 3
     "P02": "Neither prepared nor unprepared",  # → 4
-    "P03": "Not prepared",             # → 2
+    "P03": "Not prepared",             # → 1
     "P04": "Somewhat unprepared",      # → 3
     "P05": "Neither prepared nor unprepared",  # → 4
     "P06": "Somewhat unprepared",      # → 3

@@ -184,7 +184,8 @@ class TestBuildSurveyCsv:
         out = synthetic_project / "survey.csv"
 
         df = build_survey_csv(participants, before_csv, after_csv, out)
-        assert list(df.columns) == ["participant_id", "session", "preparedness_score"]
+        assert list(df.columns) == ["participant_id", "session", "preparedness_score",
+                                      "agent_perception_score"]
 
     def test_preparedness_score_range(self, synthetic_project):
         participants = _load_participants(synthetic_project)
@@ -208,8 +209,8 @@ class TestBuildSurveyCsv:
         df = build_survey_csv(participants, before_csv, after_csv, out)
         s1 = df[df["session"] == 1]
 
-        # "Somewhat unprepared" → 3, "Neither..." → 4, "Not prepared" → 2
-        expected = {"P01": 3.0, "P02": 4.0, "P03": 2.0, "P04": 3.0, "P05": 4.0, "P06": 3.0}
+        # "Somewhat unprepared" → 3, "Neither..." → 4, "Not prepared" → 1
+        expected = {"P01": 3.0, "P02": 4.0, "P03": 1.0, "P04": 3.0, "P05": 4.0, "P06": 3.0}
         for pid, exp in expected.items():
             actual = s1.loc[s1["participant_id"] == pid, "preparedness_score"].iloc[0]
             assert actual == pytest.approx(exp), f"{pid} S1: expected {exp}, got {actual}"

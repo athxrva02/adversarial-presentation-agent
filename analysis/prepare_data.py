@@ -8,9 +8,10 @@ What it does:
 1. Reads analysis/participants.csv (canonical participant → session directory mapping)
 2. Augments each results/{session_dir}/summary.csv with participant_id, session, and
    memory_type columns (writes in-place)
-3. Builds survey.csv with participant_id, session, preparedness_score (range 1–7):
+3. Builds survey.csv with participant_id, session, preparedness_score, agent_perception_score:
    - session 1 → before-interaction preparedness question mapped to 1–7
-   - session 2 → mean of 13 after-interaction Likert items (each 1–7)
+   - session 2 → preparedness_score = mean of 13 after-interaction Likert items (each 1–7)
+                  agent_perception_score = mean of 6 usefulness/reliability/actionability items
 """
 
 from __future__ import annotations
@@ -45,6 +46,17 @@ PREPAREDNESS_7: dict[str, int] = {
 # After-survey metadata columns that are NOT Likert items
 _AFTER_META_COLS = {"ID", "Start time", "Completion time", "Email", "Name",
                     "Last modified time", "Name2"}
+
+# Likert items that assess perceived usefulness, reliability, and actionability
+# (used to compute the agent perception score — H3 DV)
+_AGENT_PERCEPTION_ITEMS = {
+    "Using the agent would enhance my effectiveness in giving presentations",
+    "Using the agent would enhance my public speaking skills",
+    "I would find the agent useful for my work",
+    "I believe the agent is reliable and truthful",
+    "I find the agent logical and consistent",
+    "I find the agent's feedback actionable",
+}
 
 
 def preparedness_to_score(label: str) -> float:
@@ -114,10 +126,12 @@ def build_survey_csv(
     out: Path,
 ) -> pd.DataFrame:
     """
-    Build survey.csv with columns: participant_id, session, preparedness_score.
+    Build survey.csv with columns: participant_id, session, preparedness_score,
+    agent_perception_score.
 
     session 1 score  — preparedness question from before-survey, mapped to 1–7
-    session 2 score  — mean of 13 Likert items from after-survey (each 1–7)
+    session 2 score  — preparedness_score: mean of 13 Likert items (each 1–7)
+                       agent_perception_score: mean of 6 usefulness/reliability/actionability items
 
     Returns the DataFrame (also written to `out`).
     """
@@ -167,16 +181,27 @@ def build_survey_csv(
                     raw_scores.append(encoded)
 
             if len(raw_scores) == len(likert_cols):
+                # Agent perception score: mean of usefulness/reliability/actionability items
+                perception_scores = [
+                    encoded
+                    for col, encoded in zip(likert_cols, raw_scores)
+                    if col in _AGENT_PERCEPTION_ITEMS
+                ]
                 rows.append({
                     "participant_id": pid,
                     "session": 2,
                     "preparedness_score": round(sum(raw_scores) / len(raw_scores), 3),
+                    "agent_perception_score": (
+                        round(sum(perception_scores) / len(perception_scores), 3)
+                        if perception_scores else None
+                    ),
                 })
 
     for w in warnings:
         print(f"  WARNING: {w}")
 
-    survey_df = pd.DataFrame(rows, columns=["participant_id", "session", "preparedness_score"])
+    survey_df = pd.DataFrame(rows, columns=["participant_id", "session", "preparedness_score",
+                                              "agent_perception_score"])
     survey_df.to_csv(out, index=False)
     return survey_df
 

@@ -5,7 +5,7 @@
 # - Between-subjects: `condition` (hybrid-memory / non-hybrid-memory)
 # - Within-subjects: `session` (1, 2)
 # - DVs: composite performance score (0–100), perceived preparedness score (1–7),
-#   contradictions detected (count)
+#   contradictions detected (count), agent perception score (1–7)
 #
 # **Hypotheses tested:**
 # - **H1** — memory-enabled participants report higher perceived preparedness
@@ -22,7 +22,7 @@
 #
 # **Data sources:**
 # - `results/*/summary.csv` — one row per participant-session (exported by export.py)
-# - `survey.csv` — flat CSV with `participant_id`, `session`, `preparedness_score`
+# - `survey.csv` — flat CSV with `participant_id`, `session`, `preparedness_score`, `agent_perception_score`
 # - `analysis/participants.csv` — maps session directories to participant IDs and conditions
 #
 # **Conversion to Jupyter:** `jupytext --to notebook analysis_nb.py`
@@ -47,7 +47,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # --- Paths (edit as needed) ---
 RESULTS_DIR = Path("results")                  # directory containing timestamped run subdirs
-SURVEY_CSV = Path("survey.csv")                # flat CSV: participant_id, session, preparedness_score
+SURVEY_CSV = Path("survey.csv")                # flat CSV: participant_id, session, preparedness_score, agent_perception_score
 PARTICIPANTS_CSV = Path("analysis/participants.csv")  # directory→participant_id mapping
 
 # --- Study constants ---
@@ -56,8 +56,10 @@ N_PARTICIPANTS = 30
 N_SESSIONS = 2
 N_PER_CONDITION = 15
 N_COMPARISONS = N_SESSIONS          # Bonferroni denominator for post-hoc t-tests
+N_NP_COMPARISONS = 4                # Non-parametric: 2 Mann-Whitney + 2 Wilcoxon per DV
 
 ALPHA_BONFERRONI = ALPHA / N_COMPARISONS
+ALPHA_NP_BONFERRONI = ALPHA / N_NP_COMPARISONS  # = 0.0125
 
 CONDITION_MAP = {
     "hybrid": "hybrid-memory",
@@ -136,6 +138,14 @@ def validate_data(df: pd.DataFrame, label: str = "merged") -> None:
                 f"{len(bad_conf)} preparedness_score value(s) outside [1, 7]"
             )
 
+    if "agent_perception_score" in df.columns:
+        s2_aps = df[df["session"] == 2]["agent_perception_score"].dropna()
+        bad_aps = s2_aps[~s2_aps.between(1, 7)]
+        if not bad_aps.empty:
+            issues.append(
+                f"{len(bad_aps)} agent_perception_score value(s) outside [1, 7]"
+            )
+
     if issues:
         print(f"\n[DATA WARNINGS — {label}]")
         for issue in issues:
@@ -158,11 +168,14 @@ survey_df = pd.read_csv(SURVEY_CSV)
 survey_df["session"] = survey_df["session"].astype(int)
 print(f"Loaded survey CSV → {len(survey_df)} rows")
 
-# Merge: keep overall_score, contradictions_detected, and preparedness_score
+# Merge: keep overall_score, contradictions_detected, preparedness_score, agent_perception_score
 perf_cols = ["participant_id", "session", "condition",
              "overall_score", "contradictions_detected"]
+survey_cols = ["participant_id", "session", "preparedness_score"]
+if "agent_perception_score" in survey_df.columns:
+    survey_cols.append("agent_perception_score")
 df = perf_df[perf_cols].merge(
-    survey_df[["participant_id", "session", "preparedness_score"]],
+    survey_df[survey_cols],
     on=["participant_id", "session"],
     how="inner",
     validate="1:1",
@@ -176,18 +189,26 @@ validate_data(df, label="merged dataset")
 # ## Section 2: Descriptive Statistics
 
 # %%
+# DVs analysed via mixed ANOVA (both sessions)
 DVS = {
     "overall_score": "Composite Performance Score (0–100)",
     "preparedness_score": "Perceived Preparedness Score (1–7)",
     "contradictions_detected": "Contradictions Detected (count)",
 }
+# DV analysed via between-condition test (session 2 only)
+DVS_S2 = {
+    "agent_perception_score": "Agent Perception Score (1–7)",
+}
+# All DVs (for descriptive stats)
+DVS_ALL = {**DVS, **DVS_S2}
 
-for col, label in DVS.items():
+for col, label in DVS_ALL.items():
     print(f"\n{'='*60}")
     print(f"Descriptive statistics — {label}")
     print("="*60)
+    subset = df.dropna(subset=[col])
     desc = (
-        df.groupby(["condition", "session"])[col]
+        subset.groupby(["condition", "session"])[col]
         .agg(n="count", mean="mean", sd="std", se=lambda x: x.std() / np.sqrt(len(x)),
              min="min", max="max")
         .round(3)
@@ -195,7 +216,7 @@ for col, label in DVS.items():
     print(desc.to_string())
 
 # %%
-# Line plots: Composite Performance Score and Perceived Preparedness Score
+# Line plots: Composite Performance Score and Perceived Preparedness Score (both-session DVs)
 line_dvs = {k: v for k, v in DVS.items() if k != "contradictions_detected"}
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -221,13 +242,13 @@ plt.savefig("fig_line_plots.png", dpi=150)
 plt.show()
 
 # %%
-# Box plots: all three DVs
-fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+# Box plots: all DVs (mixed-ANOVA DVs by condition×session, agent perception by condition at S2)
+fig, axes = plt.subplots(1, len(DVS_ALL), figsize=(6 * len(DVS_ALL), 5))
 
-for ax, (col, label) in zip(axes, DVS.items()):
-    plot_df = df.copy()
+for ax, (col, label) in zip(axes, DVS_ALL.items()):
+    plot_df = df.dropna(subset=[col]).copy()
     plot_df["group"] = plot_df["condition"] + " / S" + plot_df["session"].astype(str)
-    order = ["hybrid-memory / S1", "hybrid-memory / S2", "non-hybrid-memory / S1", "non-hybrid-memory / S2"]
+    order = sorted(plot_df["group"].unique())
     sns.boxplot(data=plot_df, x="group", y=col, order=order, ax=ax)
     ax.set_xlabel("Condition / Session")
     ax.set_ylabel(label)
@@ -382,22 +403,24 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
             "Wilcoxon signed-rank is used here (2 sessions)."
         )
 
-        # Between-group: Mann-Whitney U at each session
-        print("\n  Mann-Whitney U (between conditions, per session):")
+        # Between-group: Mann-Whitney U at each session (Bonferroni-corrected)
+        print(f"\n  Mann-Whitney U (between conditions, per session):")
+        print(f"  Bonferroni α = {ALPHA}/{N_NP_COMPARISONS} = {ALPHA_NP_BONFERRONI:.4f}")
         for sess in sorted(df["session"].unique()):
             sess_df = df[df["session"] == sess]
             mem = sess_df[sess_df["condition"] == "hybrid-memory"][col].dropna().values
             nomem = sess_df[sess_df["condition"] == "non-hybrid-memory"][col].dropna().values
             U, p = stats.mannwhitneyu(mem, nomem, alternative="two-sided")
-            sig = "Yes" if p < ALPHA else "No"
-            print(f"    Session {sess}: U = {U:.1f}, p = {p:.4f} → Significant: {sig}")
+            p_bonf = min(p * N_NP_COMPARISONS, 1.0)
+            sig = "Yes" if p_bonf < ALPHA else "No"
+            print(f"    Session {sess}: U = {U:.1f}, p = {p:.4f}, p_bonf = {p_bonf:.4f} → Significant: {sig}")
             results.append({
                 "DV": label, "Effect": f"Between (Session {sess})",
-                "F": np.nan, "df": np.nan, "p": round(p, 4), "eta_p2": np.nan,
-                "Significant": sig, "Test": "Mann-Whitney U",
+                "F": np.nan, "df": np.nan, "p": round(p_bonf, 4), "eta_p2": np.nan,
+                "Significant": sig, "Test": "Mann-Whitney U (Bonferroni)",
             })
 
-        # Within-group: Wilcoxon signed-rank per condition
+        # Within-group: Wilcoxon signed-rank per condition (Bonferroni-corrected)
         print("\n  Wilcoxon signed-rank (within condition across sessions):")
         for cond in ["hybrid-memory", "non-hybrid-memory"]:
             cond_df = df[df["condition"] == cond].sort_values(["participant_id", "session"])
@@ -410,16 +433,17 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
                 results.append({
                     "DV": label, "Effect": f"Within '{cond}'",
                     "F": np.nan, "df": np.nan, "p": 1.0, "eta_p2": np.nan,
-                    "Significant": "No", "Test": "Wilcoxon signed-rank",
+                    "Significant": "No", "Test": "Wilcoxon signed-rank (Bonferroni)",
                 })
                 continue
             stat, p = stats.wilcoxon(s1[common].values, s2[common].values)
-            sig = "Yes" if p < ALPHA else "No"
-            print(f"    {cond}: W = {stat:.1f}, p = {p:.4f} → Significant: {sig}")
+            p_bonf = min(p * N_NP_COMPARISONS, 1.0)
+            sig = "Yes" if p_bonf < ALPHA else "No"
+            print(f"    {cond}: W = {stat:.1f}, p = {p:.4f}, p_bonf = {p_bonf:.4f} → Significant: {sig}")
             results.append({
                 "DV": label, "Effect": f"Within '{cond}'",
-                "F": np.nan, "df": np.nan, "p": round(p, 4), "eta_p2": np.nan,
-                "Significant": sig, "Test": "Wilcoxon signed-rank",
+                "F": np.nan, "df": np.nan, "p": round(p_bonf, 4), "eta_p2": np.nan,
+                "Significant": sig, "Test": "Wilcoxon signed-rank (Bonferroni)",
             })
 
     return results
@@ -441,35 +465,94 @@ perf_results = run_mixed_anova(df, "overall_score", DVS["overall_score"])
 contra_results = run_mixed_anova(df, "contradictions_detected", DVS["contradictions_detected"])
 
 # %% [markdown]
-# ## Section 5: H1 & H3 — Perceived Preparedness / Agent Perception Score
+# ## Section 5: H1 — Perceived Preparedness Score
 #
-# The perceived preparedness score (1–7) is derived from the post-session questionnaire (all 13
-# Likert items averaged on the natural 1–7 scale). It serves two roles:
-#
-# - **H1** (subjective performance / perceived preparedness): addressed by the
-#   **within-condition** Wilcoxon signed-rank tests — did participants report higher
-#   perceived preparedness after the second session compared to the first, within each condition?
-#
-# - **H3** (agent perception — helpfulness and question relevance): addressed by the
-#   **between-condition** Mann-Whitney U at **session 2** — did the memory-enabled agent
-#   produce a higher overall perception score than the non-hybrid-memory agent?
+# The perceived preparedness score (1–7) is derived from the questionnaires: session 1 uses
+# the pre-interaction preparedness item (mapped 1–7), session 2 uses the unweighted mean of
+# all 13 post-interaction Likert items. This tests **H1**: do participants report higher
+# perceived preparedness after the second session?
 
 # %%
 conf_results = run_mixed_anova(df, "preparedness_score", DVS["preparedness_score"])
 
 # %% [markdown]
+# ## Section 5.5: H3 — Agent Perception Score (between-condition, Session 2 only)
+#
+# The agent perception score (1–7) is the unweighted mean of the post-study Likert items
+# assessing perceived usefulness, reliability, and actionability. It is measured once
+# (after Session 2) and compared between conditions using an independent-samples t-test
+# (or Mann–Whitney U if normality is violated).
+
+# %%
+def run_h3_agent_perception(df: pd.DataFrame) -> list:
+    """Between-condition test on agent_perception_score at session 2."""
+    col = "agent_perception_score"
+    label = DVS_ALL[col]
+
+    print(f"\n{'='*60}")
+    print(f"H3 — {label} (Session 2, between conditions)")
+    print("="*60)
+
+    s2 = df[df["session"] == 2].dropna(subset=[col])
+    mem = s2[s2["condition"] == "hybrid-memory"][col].values
+    nomem = s2[s2["condition"] == "non-hybrid-memory"][col].values
+
+    print(f"  hybrid-memory:     n={len(mem)}, mean={mem.mean():.3f}, sd={mem.std(ddof=1):.3f}")
+    print(f"  non-hybrid-memory: n={len(nomem)}, mean={nomem.mean():.3f}, sd={nomem.std(ddof=1):.3f}")
+
+    # Normality check per condition
+    print(f"\n  Shapiro-Wilk normality test:")
+    all_normal = True
+    for name, vals in [("hybrid-memory", mem), ("non-hybrid-memory", nomem)]:
+        if len(vals) < 3:
+            print(f"    {name}: SKIP (n<3)")
+            continue
+        W, p = stats.shapiro(vals)
+        ok = p > ALPHA
+        if not ok:
+            all_normal = False
+        flag = "PASS" if ok else "FAIL ⚠"
+        print(f"    {name}: W = {W:.4f}, p = {p:.4f} → {flag}")
+
+    results = []
+    if all_normal:
+        t, p = stats.ttest_ind(mem, nomem)
+        d = cohen_d(mem, nomem)
+        sig = "Yes" if p < ALPHA else "No"
+        print(f"\n  Independent t-test: t = {t:.3f}, p = {p:.4f}, d = {d:.3f} → Significant: {sig}")
+        results.append({
+            "DV": label, "Effect": "Between conditions (S2)",
+            "F": np.nan, "df": f"{len(mem)+len(nomem)-2}",
+            "p": round(p, 4), "eta_p2": np.nan,
+            "d": round(d, 3), "Significant": sig, "Test": "Independent t-test",
+        })
+    else:
+        U, p = stats.mannwhitneyu(mem, nomem, alternative="two-sided")
+        sig = "Yes" if p < ALPHA else "No"
+        print(f"\n  Mann-Whitney U: U = {U:.1f}, p = {p:.4f} → Significant: {sig}")
+        results.append({
+            "DV": label, "Effect": "Between conditions (S2)",
+            "F": np.nan, "df": np.nan,
+            "p": round(p, 4), "eta_p2": np.nan,
+            "Significant": sig, "Test": "Mann-Whitney U",
+        })
+
+    return results
+
+
+h3_results = run_h3_agent_perception(df)
+
+# %% [markdown]
 # ## Section 6: Correlation — Agent Perception vs. Composite Performance (Session 2)
 #
-# To assess whether participants who perceived the agent more positively also performed
-# better, we compute the Spearman rank correlation between the session-2 perceived preparedness score
-# (agent perception proxy, H3; scale 1–7) and the session-2 composite performance score.
-# Spearman's ρ is used because normality assumptions failed for both variables.
+# Spearman's ρ is computed between the session-2 agent perception score and
+# the session-2 composite performance score across all 30 participants.
 
 # %%
 s2 = df[df["session"] == 2][["participant_id", "condition",
-                               "preparedness_score", "overall_score"]].dropna()
+                               "agent_perception_score", "overall_score"]].dropna()
 
-rho, p_corr = stats.spearmanr(s2["preparedness_score"], s2["overall_score"])
+rho, p_corr = stats.spearmanr(s2["agent_perception_score"], s2["overall_score"])
 sig_corr = "Yes" if p_corr < ALPHA else "No"
 
 print(f"\n{'='*60}")
@@ -479,7 +562,7 @@ print(f"  N = {len(s2)}")
 print(f"  ρ = {rho:.3f},  p = {p_corr:.4f}  →  Significant: {sig_corr}")
 
 corr_results = [{
-    "DV": "Perception × Performance (Session 2)",
+    "DV": "Agent Perception × Performance (Session 2)",
     "Effect": "Spearman ρ",
     "Test": "Spearman correlation",
     "df": len(s2) - 2,
@@ -495,13 +578,13 @@ fig, ax = plt.subplots(figsize=(6, 5))
 palette = sns.color_palette("Set2", 2)
 cond_colors = {"hybrid-memory": palette[0], "non-hybrid-memory": palette[1]}
 for cond, grp in s2.groupby("condition"):
-    ax.scatter(grp["preparedness_score"], grp["overall_score"],
+    ax.scatter(grp["agent_perception_score"], grp["overall_score"],
                label=cond, color=cond_colors[cond], alpha=0.7)
 # Overall regression line
-m, b = np.polyfit(s2["preparedness_score"], s2["overall_score"], 1)
-x_range = np.linspace(s2["preparedness_score"].min(), s2["preparedness_score"].max(), 100)
+m, b = np.polyfit(s2["agent_perception_score"], s2["overall_score"], 1)
+x_range = np.linspace(s2["agent_perception_score"].min(), s2["agent_perception_score"].max(), 100)
 ax.plot(x_range, m * x_range + b, color="gray", linestyle="--", linewidth=1.5)
-ax.set_xlabel("Perceived Preparedness / Agent Perception Score (Session 2)")
+ax.set_xlabel("Agent Perception Score (Session 2)")
 ax.set_ylabel("Composite Performance Score (Session 2)")
 ax.set_title(f"Agent Perception vs. Performance\nSpearman ρ = {rho:.3f}, p = {p_corr:.4f}")
 ax.legend(title="Condition")
@@ -513,7 +596,7 @@ plt.show()
 # ## Section 7: Results Summary Table
 
 # %%
-all_results = perf_results + contra_results + conf_results + corr_results
+all_results = perf_results + contra_results + conf_results + h3_results + corr_results
 summary_table = pd.DataFrame(all_results)
 
 # Reorder columns sensibly
