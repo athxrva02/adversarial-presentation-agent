@@ -242,6 +242,28 @@ plt.savefig("fig_line_plots.png", dpi=150)
 plt.show()
 
 # %%
+# Line plot: Contradictions over sessions by condition (H2 visualisation)
+fig, ax = plt.subplots(figsize=(6, 5))
+contra_summary = (
+    df.groupby(["session", "condition"])["contradictions_detected"]
+    .agg(mean="mean", se=lambda x: x.std() / np.sqrt(len(x)))
+    .reset_index()
+)
+for cond, grp in contra_summary.groupby("condition"):
+    ax.errorbar(
+        grp["session"], grp["mean"], yerr=grp["se"],
+        marker="o", capsize=4, label=cond, linewidth=2,
+    )
+ax.set_xticks([1, 2])
+ax.set_xlabel("Session")
+ax.set_ylabel("Mean Contradictions Detected")
+ax.set_title("Contradictions Over Sessions by Condition")
+ax.legend(title="Condition")
+plt.tight_layout()
+plt.savefig("fig_contradictions_line.png", dpi=150)
+plt.show()
+
+# %%
 # Box plots: all DVs (mixed-ANOVA DVs by condition×session, agent perception by condition at S2)
 fig, axes = plt.subplots(1, len(DVS_ALL), figsize=(6 * len(DVS_ALL), 5))
 
@@ -543,6 +565,51 @@ def run_h3_agent_perception(df: pd.DataFrame) -> list:
 
 h3_results = run_h3_agent_perception(df)
 
+# %%
+# Bar plot: H3 — Agent Perception Score by condition (Session 2) with 95% CI
+fig, ax = plt.subplots(figsize=(5, 5))
+s2_perception = df[df["session"] == 2].dropna(subset=["agent_perception_score"])
+
+h3_stats = (
+    s2_perception.groupby("condition")["agent_perception_score"]
+    .agg(mean="mean", sd="std", n="count")
+    .reset_index()
+)
+h3_stats["ci95"] = h3_stats.apply(
+    lambda r: stats.t.ppf(0.975, r["n"] - 1) * r["sd"] / np.sqrt(r["n"]), axis=1
+)
+
+bar_order = ["hybrid-memory", "non-hybrid-memory"]
+h3_stats = h3_stats.set_index("condition").loc[bar_order].reset_index()
+
+bars = ax.bar(
+    h3_stats["condition"], h3_stats["mean"],
+    yerr=h3_stats["ci95"], capsize=6,
+    color=sns.color_palette("Set2", 2), edgecolor="black", linewidth=0.8,
+)
+
+# Jittered individual participant points
+for i, cond in enumerate(bar_order):
+    pts = s2_perception[s2_perception["condition"] == cond]["agent_perception_score"].values
+    jitter = np.random.default_rng(42).uniform(-0.15, 0.15, size=len(pts))
+    ax.scatter(i + jitter, pts, color="black", alpha=0.5, s=20, zorder=3)
+
+# Add significance marker if p < 0.05
+h3_p = h3_results[0]["p"] if h3_results else 1.0
+if h3_p < 0.05:
+    y_max = (h3_stats["mean"] + h3_stats["ci95"]).max()
+    ax.plot([0, 0, 1, 1], [y_max + 0.1, y_max + 0.15, y_max + 0.15, y_max + 0.1],
+            color="black", linewidth=1.2)
+    ax.text(0.5, y_max + 0.18, "*", ha="center", va="bottom", fontsize=16, fontweight="bold")
+
+ax.set_xlabel("Condition")
+ax.set_ylabel("Agent Perception Score (1–7)")
+ax.set_title(f"H3: Agent Perception Score (Session 2)\np = {h3_p:.4f}")
+ax.set_ylim(0, 7.5)
+plt.tight_layout()
+plt.savefig("fig_h3_barplot.png", dpi=150)
+plt.show()
+
 # %% [markdown]
 # ## Section 6: Correlation — Agent Perception vs. Composite Performance (Session 2)
 #
@@ -613,3 +680,44 @@ print(summary_table.fillna("—").to_string(index=False))
 # Save to CSV for reporting
 summary_table.to_csv("results_summary.csv", index=False)
 print("\nResults saved to results_summary.csv")
+
+# %% [markdown]
+# ## Section 8: Descriptive Statistics Table for Appendix
+#
+# Exports a CSV with means, standard deviations, and effect sizes (Cohen's d)
+# for each DV, broken down by condition and session. This table is intended for
+# direct inclusion in the paper's appendix.
+
+# %%
+appendix_rows = []
+for col, label in DVS_ALL.items():
+    subset = df.dropna(subset=[col])
+    for sess in sorted(subset["session"].unique()):
+        sess_df = subset[subset["session"] == sess]
+        for cond in ["hybrid-memory", "non-hybrid-memory"]:
+            vals = sess_df[sess_df["condition"] == cond][col]
+            appendix_rows.append({
+                "DV": label,
+                "Session": sess,
+                "Condition": cond,
+                "N": len(vals),
+                "Mean": round(vals.mean(), 3),
+                "SD": round(vals.std(ddof=1), 3),
+                "SE": round(vals.std(ddof=1) / np.sqrt(len(vals)), 3),
+            })
+        # Cohen's d between conditions for this session
+        mem = sess_df[sess_df["condition"] == "hybrid-memory"][col].dropna().values
+        nomem = sess_df[sess_df["condition"] == "non-hybrid-memory"][col].dropna().values
+        d = cohen_d(mem, nomem) if len(mem) > 1 and len(nomem) > 1 else np.nan
+        # Add d to both rows for this session
+        appendix_rows[-1]["Cohen_d (hybrid vs non-hybrid)"] = round(d, 3) if not np.isnan(d) else "—"
+        appendix_rows[-2]["Cohen_d (hybrid vs non-hybrid)"] = round(d, 3) if not np.isnan(d) else "—"
+
+appendix_table = pd.DataFrame(appendix_rows)
+print("\n" + "="*80)
+print("APPENDIX — Descriptive Statistics")
+print("="*80)
+print(appendix_table.to_string(index=False))
+
+appendix_table.to_csv("appendix_descriptives.csv", index=False)
+print("\nSaved to appendix_descriptives.csv")
