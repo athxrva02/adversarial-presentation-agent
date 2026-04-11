@@ -439,7 +439,7 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
             results.append({
                 "DV": label, "Effect": f"Between (Session {sess})",
                 "F": np.nan, "df": np.nan, "p": round(p_bonf, 4), "eta_p2": np.nan,
-                "Significant": sig, "Test": "Mann-Whitney U (Bonferroni)",
+                "U": round(U, 1), "Significant": sig, "Test": "Mann-Whitney U (Bonferroni)",
             })
 
         # Within-group: Wilcoxon signed-rank per condition (Bonferroni-corrected)
@@ -455,7 +455,7 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
                 results.append({
                     "DV": label, "Effect": f"Within '{cond}'",
                     "F": np.nan, "df": np.nan, "p": 1.0, "eta_p2": np.nan,
-                    "Significant": "No", "Test": "Wilcoxon signed-rank (Bonferroni)",
+                    "W": np.nan, "Significant": "No", "Test": "Wilcoxon signed-rank (Bonferroni)",
                 })
                 continue
             stat, p = stats.wilcoxon(s1[common].values, s2[common].values)
@@ -465,7 +465,7 @@ def run_mixed_anova(df: pd.DataFrame, col: str, label: str) -> list:
             results.append({
                 "DV": label, "Effect": f"Within '{cond}'",
                 "F": np.nan, "df": np.nan, "p": round(p_bonf, 4), "eta_p2": np.nan,
-                "Significant": sig, "Test": "Wilcoxon signed-rank (Bonferroni)",
+                "W": round(stat, 1), "Significant": sig, "Test": "Wilcoxon signed-rank (Bonferroni)",
             })
 
     return results
@@ -547,7 +547,7 @@ def run_h3_agent_perception(df: pd.DataFrame) -> list:
             "DV": label, "Effect": "Between conditions (S2)",
             "F": np.nan, "df": f"{len(mem)+len(nomem)-2}",
             "p": round(p, 4), "eta_p2": np.nan,
-            "d": round(d, 3), "Significant": sig, "Test": "Independent t-test",
+            "t": round(t, 3), "d": round(d, 3), "Significant": sig, "Test": "Independent t-test",
         })
     else:
         U, p = stats.mannwhitneyu(mem, nomem, alternative="two-sided")
@@ -557,7 +557,7 @@ def run_h3_agent_perception(df: pd.DataFrame) -> list:
             "DV": label, "Effect": "Between conditions (S2)",
             "F": np.nan, "df": np.nan,
             "p": round(p, 4), "eta_p2": np.nan,
-            "Significant": sig, "Test": "Mann-Whitney U",
+            "U": round(U, 1), "Significant": sig, "Test": "Mann-Whitney U",
         })
 
     return results
@@ -668,7 +668,7 @@ all_results = perf_results + contra_results + conf_results + h3_results + corr_r
 summary_table = pd.DataFrame(all_results)
 
 # Reorder columns sensibly
-col_order = ["DV", "Effect", "Test", "df", "F", "p", "eta_p2", "rho", "d", "Significant"]
+col_order = ["DV", "Effect", "Test", "df", "F", "t", "U", "W", "p", "eta_p2", "rho", "d", "Significant"]
 col_order = [c for c in col_order if c in summary_table.columns]
 summary_table = summary_table[col_order]
 
@@ -721,3 +721,15 @@ print(appendix_table.to_string(index=False))
 
 appendix_table.to_csv("appendix_descriptives.csv", index=False)
 print("\nSaved to appendix_descriptives.csv")
+
+# Inferential statistics table for appendix
+print("\n" + "="*80)
+print("APPENDIX — Inferential Statistics")
+print("="*80)
+inf_col_order = ["DV", "Effect", "Test", "df", "F", "t", "U", "W", "p", "eta_p2", "rho", "d", "Significant"]
+inf_col_order = [c for c in inf_col_order if c in summary_table.columns]
+inf_table = summary_table[inf_col_order].copy()
+print(inf_table.fillna("—").to_string(index=False))
+
+inf_table.to_csv("appendix_inferential.csv", index=False)
+print("\nSaved to appendix_inferential.csv")
